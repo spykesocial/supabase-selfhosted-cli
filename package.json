@@ -1,6 +1,6 @@
 {
   "name": "supabase-selfhosted-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI for self-hosted Supabase — deploy edge functions, push migrations, and sync types (VPS, Docker, local)",
   "type": "module",
   "bin": {

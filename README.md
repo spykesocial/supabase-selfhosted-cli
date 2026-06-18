@@ -10,6 +10,10 @@ Inspired by the official Supabase CLI, but built for self-hosted layouts on your
 npm install -g supabase-selfhosted-cli
 ```
 
+```bash
+yarn global add supabase-selfhosted-cli
+```
+
 Or run from source:
 
 ```bash

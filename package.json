@@ -1,0 +1,46 @@
+{
+  "name": "supabase-selfhosted-cli",
+  "version": "0.1.0",
+  "description": "CLI for self-hosted Supabase — deploy edge functions, push migrations, and sync types (VPS, Docker, local)",
+  "type": "module",
+  "bin": {
+    "supabase-selfhosted-cli": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/cli.ts --format esm --dts --clean",
+    "dev": "tsx src/cli.ts",
+    "prepublishOnly": "npm run build",
+    "release:bundle": "bash scripts/release-bundle.sh",
+    "test": "tsx --test src/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "supabase",
+    "self-hosted",
+    "docker",
+    "vps",
+    "cli",
+    "edge-functions"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.5.1",
+    "commander": "^13.1.0",
+    "ssh2": "^1.16.0",
+    "ssh2-sftp-client": "^12.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "@types/ssh2": "^1.15.5",
+    "@types/ssh2-sftp-client": "^9.0.5",
+    "tsup": "^8.5.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.2"
+  }
+}

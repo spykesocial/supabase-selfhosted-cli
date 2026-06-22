@@ -1,6 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildDbUrl, maskSecret, type SupabaseSelfhostedConfig } from "./config.js";
+import {
+  buildDbUrl,
+  maskSecret,
+  suggestProfileName,
+  type SupabaseSelfhostedConfig,
+} from "./config.js";
 
 const sampleConfig: SupabaseSelfhostedConfig = {
   profile: "default",
@@ -50,6 +55,19 @@ describe("maskSecret", () => {
   it("masks secrets without exposing full value", () => {
     assert.equal(maskSecret("ab"), "****");
     assert.match(maskSecret("super-secret-password"), /^su\*+rd$/);
+  });
+});
+
+describe("suggestProfileName", () => {
+  it("derives a safe profile name from the directory basename", () => {
+    assert.equal(
+      suggestProfileName("/Users/dev/Documents/GitHub/supabase-keepalive"),
+      "supabase-keepalive",
+    );
+    assert.equal(
+      suggestProfileName("/Users/dev/My Cool Project"),
+      "my-cool-project",
+    );
   });
 });
 

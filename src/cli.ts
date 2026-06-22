@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { runDbPush } from "./commands/db-push.js";
 import { runFunctionsDeploy } from "./commands/functions-deploy.js";
 import { runGenTypes } from "./commands/gen-types.js";
+import { runProjects } from "./commands/projects.js";
 import { runSettings } from "./commands/settings.js";
 import { runSetup } from "./commands/setup.js";
 import { runInteractiveMenu } from "./lib/menu.js";
@@ -23,10 +24,36 @@ program
 program
   .command("setup")
   .description("Interactive setup — store SSH/local, database, and deploy settings")
-  .option("-p, --profile <name>", "Profile name", "default")
-  .action(async (options: { profile: string }) => {
+  .option("-p, --profile <name>", "Profile name (defaults to this project's folder name)")
+  .action(async (options: { profile?: string }) => {
     await runSetup({ profile: options.profile, linkProject: true });
   });
+
+program
+  .command("projects")
+  .description("List, link, switch, edit, or delete project profiles")
+  .option("-p, --profile <name>", "Profile name")
+  .option("--list", "List linked projects and profiles")
+  .option("--link", "Link this directory to a profile")
+  .option("--switch", "Switch this directory to a different profile")
+  .option("--show", "Show profile details for this directory")
+  .option("--edit", "Edit profile credentials")
+  .option("--unlink", "Unlink this directory (keep profile)")
+  .option("--delete", "Delete a stored profile")
+  .action(
+    async (options: {
+      profile?: string;
+      list?: boolean;
+      link?: boolean;
+      switch?: boolean;
+      show?: boolean;
+      edit?: boolean;
+      unlink?: boolean;
+      delete?: boolean;
+    }) => {
+      await runProjects(options);
+    },
+  );
 
 program
   .command("settings")

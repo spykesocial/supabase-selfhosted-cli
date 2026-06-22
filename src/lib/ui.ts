@@ -1,6 +1,6 @@
 import os from "node:os";
 import process from "node:process";
-import { CONFIG_DIR, listProfiles } from "./config.js";
+import { CONFIG_DIR, listProfiles, listRegisteredProjects } from "./config.js";
 
 export const VERSION = "0.1.1";
 export const BRAND_NAME = "Velocilabs";
@@ -190,6 +190,7 @@ export function printSummaryBlock(heading: string, ...details: string[]): void {
 
 export function formatVersion(): string {
   const profiles = listProfiles();
+  const projects = listRegisteredProjects();
 
   return [
     "",
@@ -199,6 +200,7 @@ export function formatVersion(): string {
     `Platform: ${process.platform} ${os.arch()}`,
     `Config: ${CONFIG_DIR}`,
     `Profiles: ${profiles.length > 0 ? profiles.join(", ") : "(none)"}`,
+    `Linked projects: ${projects.length > 0 ? projects.map((project) => project.name).join(", ") : "(none)"}`,
     `Shell: ${process.env.SHELL ?? "unknown"}`,
     "",
   ].join("\n");
@@ -215,7 +217,8 @@ type HelpEntry = {
 
 const COMMAND_ENTRIES: HelpEntry[] = [
   { command: "supabase-selfhosted-cli", description: "Main menu" },
-  { command: "setup", description: "Interactive setup wizard" },
+  { command: "setup", description: "Interactive setup wizard for this project" },
+  { command: "projects", description: "List, link, switch, edit, or delete profiles" },
   { command: "settings", description: "View, update, or delete stored credentials" },
   { command: "functions deploy", description: "Deploy local supabase/functions" },
   { command: "db push", description: "Push local migrations with supabase db push" },
@@ -223,6 +226,8 @@ const COMMAND_ENTRIES: HelpEntry[] = [
 ];
 
 const EXAMPLE_ENTRIES: HelpEntry[] = [
+  { command: "projects --list", description: "Show all linked projects and servers" },
+  { command: "projects --link", description: "Link this repo to a profile" },
   { command: "setup -p staging", description: "Create a named profile" },
   { command: "functions deploy --prune", description: "Deploy and remove remote-only files" },
   { command: "functions deploy --no-restart", description: "Deploy without restarting runtime" },

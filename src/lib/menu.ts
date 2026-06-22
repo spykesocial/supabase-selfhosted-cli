@@ -1,10 +1,13 @@
 import readline from "node:readline";
+import path from "node:path";
 import process from "node:process";
 import { runDbPush } from "../commands/db-push.js";
 import { runFunctionsDeploy } from "../commands/functions-deploy.js";
 import { runGenTypes } from "../commands/gen-types.js";
+import { runProjects } from "../commands/projects.js";
 import { runSettings } from "../commands/settings.js";
 import { runSetup } from "../commands/setup.js";
+import { resolveProjectContext } from "./config.js";
 import {
   colors,
   formatHelp,
@@ -25,9 +28,13 @@ type MenuItem = {
 const MENU_ITEMS: MenuItem[] = [
   {
     label: "Setup",
-    description: "Configure SSH/local credentials",
+    description: "Configure credentials for this project",
     run: async () => {
-      await runSetup({ profile: "default", linkProject: true });
+      const context = resolveProjectContext(process.cwd());
+      await runSetup({
+        profile: context.isLinked ? context.profile : context.suggestedProfileName,
+        linkProject: true,
+      });
     },
   },
   {
@@ -52,6 +59,13 @@ const MENU_ITEMS: MenuItem[] = [
     },
   },
   {
+    label: "Projects",
+    description: "List, link, switch, or delete project profiles",
+    run: async () => {
+      await runProjects();
+    },
+  },
+  {
     label: "Settings",
     description: "View or update stored profile",
     run: async () => {
@@ -64,6 +78,18 @@ function clearScreen(): void {
   process.stdout.write("\u001b[2J\u001b[H");
 }
 
+function renderMenuContext(): string[] {
+  const context = resolveProjectContext(process.cwd());
+  const projectName = path.basename(context.projectRoot);
+  const profileLabel = context.isLinked
+    ? context.profile
+    : `(not linked — run Setup or Projects)`;
+
+  return [
+    `${colors.gray}Project: ${projectName}  ·  Profile: ${profileLabel}${colors.nc}`,
+  ];
+}
+
 function clearLine(): string {
   return "\r\u001b[2K";
 }
@@ -72,6 +98,12 @@ function renderMenu(selected: number): void {
   clearScreen();
 
   for (const line of showBrandBanner().split("\n")) {
+    process.stdout.write(`${clearLine()}${line}\n`);
+  }
+
+  process.stdout.write(`${clearLine()}\n`);
+
+  for (const line of renderMenuContext()) {
     process.stdout.write(`${clearLine()}${line}\n`);
   }
 

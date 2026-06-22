@@ -7,9 +7,9 @@ import {
   select,
 } from "@inquirer/prompts";
 import {
-  DEFAULT_PROFILE,
   formatConfigSummary,
   loadConfig,
+  resolveProjectContext,
   saveConfig,
   saveProjectLink,
   type DeployTarget,
@@ -58,7 +58,8 @@ export async function runSetup(options?: {
   forceUpdate?: boolean;
 }): Promise<SupabaseSelfhostedConfig> {
   const cwd = process.cwd();
-  const profile = options?.profile ?? DEFAULT_PROFILE;
+  const context = resolveProjectContext(cwd, options?.profile);
+  const profile = options?.profile ?? context.suggestedProfileName;
   const existing = loadConfig(profile);
 
   if (existing && !options?.forceUpdate) {
@@ -74,6 +75,7 @@ export async function runSetup(options?: {
   }
 
   console.log(showBrandBanner());
+  logInfo(`Setting up profile "${profile}" for ${path.basename(context.projectRoot)}`);
   logInfo("These settings are stored locally in ~/.supabase-selfhosted-cli/");
   console.log("");
 
@@ -245,8 +247,8 @@ export async function runSetup(options?: {
   saveConfig(config);
 
   if (linkProject) {
-    saveProjectLink(cwd, profile);
-    logSuccess(`Linked ${cwd} to profile "${profile}".`);
+    saveProjectLink(cwd, profile, path.basename(context.projectRoot));
+    logSuccess(`Linked ${context.projectRoot} to profile "${profile}".`);
   }
 
   printSummaryBlock("Setup complete", ...formatConfigSummary(config).split("\n"));

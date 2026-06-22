@@ -59,7 +59,7 @@ The wizard asks where your instance runs:
 | Functions destination | `/path/to/supabase/docker/volumes/functions` (absolute path to your edge-runtime volume mount) |
 | Database host | `127.0.0.1` |
 | Migration port | `5432` (or your exposed Postgres port) |
-| Types port | `5432` |
+| Types port | `5432` (or your exposed Postgres pooler port) | 
 | Restart command | `docker compose restart edge-runtime` or auto-detect edge container |
 
 Setup creates `.supabase-selfhosted-cli.json` in your project so commands know which profile to use.

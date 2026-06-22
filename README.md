@@ -140,11 +140,34 @@ Passwords are stored locally on your machine. Delete them anytime via `supabase-
 
 ## Multiple projects / instances
 
-Use named profiles:
+Each repo gets its own profile linked via `.supabase-selfhosted-cli.json`. Credentials live in `~/.supabase-selfhosted-cli/profiles/` and can point at different servers.
+
+From a project directory:
+
+```bash
+# See all linked projects and which server each profile uses
+supabase-selfhosted-cli projects --list
+
+# First time in a new repo — creates profile "supabase-keepalive" from the folder name
+supabase-selfhosted-cli setup
+
+# Link this repo to an existing profile (same or different server)
+supabase-selfhosted-cli projects --link
+
+# Point this repo at a different profile
+supabase-selfhosted-cli projects --switch
+
+# Edit SSH/DB credentials for a profile
+supabase-selfhosted-cli projects --edit
+
+# Remove stored credentials for a profile
+supabase-selfhosted-cli projects --delete
+```
+
+Named profiles still work with `-p`:
 
 ```bash
 supabase-selfhosted-cli setup --profile production
-supabase-selfhosted-cli setup --profile local-docker
 supabase-selfhosted-cli functions deploy --profile production
 ```
 

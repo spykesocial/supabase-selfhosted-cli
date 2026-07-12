@@ -107,8 +107,8 @@ export async function restartLocal(config: SupabaseSelfhostedConfig): Promise<vo
   if (resolved.autoScoped) {
     logWarning(
       resolved.projectId
-        ? `Restart command was host-wide; scoping to project "${resolved.projectId}" from functions path.`
-        : "Restart command was incomplete; using project-scoped command derived from functions path.",
+        ? `Restart command was not mount-scoped; finding the edge container that mounts project "${resolved.projectId}" functions path.`
+        : "Restart command was not mount-scoped; finding the edge container by functions volume mount.",
     );
     if (config.deploy.restartCommand.trim() !== resolved.command) {
       saveConfig(persistScopedRestartCommand(config, resolved.command));

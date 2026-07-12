@@ -2,7 +2,7 @@ import os from "node:os";
 import process from "node:process";
 import { CONFIG_DIR, listProfiles, listRegisteredProjects } from "./config.js";
 
-export const VERSION = "0.1.1";
+export const VERSION = "0.2.2";
 export const BRAND_NAME = "Velocilabs";
 export const BRAND_URL = "https://velocilabs.com";
 export const SPYKE_URL = "https://spyke.social";

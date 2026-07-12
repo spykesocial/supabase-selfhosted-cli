@@ -17,6 +17,11 @@ import {
 } from "../lib/config.js";
 import { findSupabaseProjectRoot } from "../lib/paths.js";
 import {
+  buildProjectScopedRestartCommand,
+  isUnsafeGlobalRestartCommand,
+  UNSAFE_GLOBAL_EDGE_RESTART,
+} from "../lib/restart-command.js";
+import {
   logInfo,
   logSuccess,
   logWarning,
@@ -46,11 +51,11 @@ async function promptSecretWithRetention(options: {
   });
 }
 
-const LOCAL_RESTART_DEFAULT =
-  "docker ps --format '{{.Names}}' | grep -i edge | head -n 1 | xargs -I{} docker restart {}";
-
-const REMOTE_RESTART_DEFAULT =
-  "docker ps --format '{{.Names}}' | grep -i edge | head -n 1 | xargs -I{} docker restart {}";
+function defaultRestartCommand(functionsPath: string): string {
+  return (
+    buildProjectScopedRestartCommand(functionsPath) ?? UNSAFE_GLOBAL_EDGE_RESTART
+  );
+}
 
 export async function runSetup(options?: {
   profile?: string;
@@ -199,13 +204,29 @@ export async function runSetup(options?: {
         ? "Restart command to run locally after deploy"
         : "Restart command to run over SSH after deploy";
 
+    const suggestedDefault = defaultRestartCommand(functionsDestinationPath.trim());
+    const existingIsUnsafe =
+      restartCommand.trim().length > 0 &&
+      isUnsafeGlobalRestartCommand(restartCommand);
+
+    if (existingIsUnsafe && buildProjectScopedRestartCommand(functionsDestinationPath.trim())) {
+      logWarning(
+        "Existing restart command matches any edge container on the host. Suggesting a project-scoped command instead.",
+      );
+      restartCommand = suggestedDefault;
+    }
+
     restartCommand = await input({
       message: restartPrompt,
-      default:
-        restartCommand ||
-        (target === "local" ? LOCAL_RESTART_DEFAULT : REMOTE_RESTART_DEFAULT),
+      default: restartCommand.trim() || suggestedDefault,
       validate: (value) => (value.trim() ? true : "Restart command is required"),
     });
+
+    if (isUnsafeGlobalRestartCommand(restartCommand)) {
+      logWarning(
+        "This restart command restarts the first edge container on the host. With multiple Supabase projects, that can hit the wrong stack.",
+      );
+    }
   }
 
   const linkProject =

@@ -1,7 +1,12 @@
 import path from "node:path";
-import { buildDbUrl } from "../lib/config.js";
+import {
+  buildDbUrl,
+  formatProjectContextSummary,
+  resolveProjectContext,
+} from "../lib/config.js";
 import { requireConfig } from "../lib/require-config.js";
 import { generateTypeScriptTypes } from "../lib/supabase-runner.js";
+import { printSummaryBlock } from "../lib/ui.js";
 
 export async function runGenTypes(options?: {
   profile?: string;
@@ -13,6 +18,15 @@ export async function runGenTypes(options?: {
   if (!config) {
     return;
   }
+
+  const context = resolveProjectContext(process.cwd(), options?.profile);
+  printSummaryBlock(
+    "Generating types with",
+    ...formatProjectContextSummary(context).split("\n"),
+    `Target: ${config.target === "local" ? "local machine" : `${config.ssh.user}@${config.ssh.host}`}`,
+    `DB host: ${config.database.host}:${config.database.typesPort}`,
+    `DB tenant: postgres.${config.database.tenantId}`,
+  );
 
   const outputFile = path.resolve(
     process.cwd(),

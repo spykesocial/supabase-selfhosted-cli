@@ -2,8 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 import type { SupabaseSelfhostedConfig } from "./config.js";
+import { saveConfig } from "./config.js";
 import { joinRemotePath, listLocalEntries } from "./function-sync.js";
-import { logInfo, logSuccess, withSpinner } from "./ui.js";
+import {
+  persistScopedRestartCommand,
+  resolveRestartCommand,
+} from "./restart-command.js";
+import { logInfo, logSuccess, logWarning, withSpinner } from "./ui.js";
 
 function copyDirectory(
   localDir: string,
@@ -98,17 +103,25 @@ export async function deployFunctionsLocal(
 }
 
 export async function restartLocal(config: SupabaseSelfhostedConfig): Promise<void> {
-  const command = config.deploy.restartCommand.trim();
-  if (!command) {
-    throw new Error(
-      "Restart command is not configured. Run `supabase-selfhosted-cli setup` to set it.",
+  const resolved = resolveRestartCommand(config);
+  if (resolved.autoScoped) {
+    logWarning(
+      resolved.projectId
+        ? `Restart command was host-wide; scoping to project "${resolved.projectId}" from functions path.`
+        : "Restart command was incomplete; using project-scoped command derived from functions path.",
     );
+    if (config.deploy.restartCommand.trim() !== resolved.command) {
+      saveConfig(persistScopedRestartCommand(config, resolved.command));
+      logInfo(
+        `Updated profile "${config.profile}" restart command to the project-scoped version.`,
+      );
+    }
   }
 
-  logInfo(`Running restart command: ${command}`);
+  logInfo(`Running restart command: ${resolved.command}`);
   try {
     await withSpinner("Restarting Supabase runtime...", async () => {
-      execSync(command, { stdio: "inherit", shell: "/bin/sh" });
+      execSync(resolved.command, { stdio: "inherit", shell: "/bin/sh" });
     });
   } catch {
     throw new Error("Restart command failed");

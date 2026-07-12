@@ -173,21 +173,20 @@ supabase-selfhosted-cli functions deploy --profile production
 
 ## Restart command tips
 
-Self-hosted setups differ. During setup, provide any shell command that works for your target:
+Self-hosted setups differ. During setup, the CLI suggests a **project-scoped** restart command derived from your functions path (for Dokploy: `/etc/dokploy/compose/<project-id>/...`). That way only that stack's edge-functions container is restarted — never another project's.
 
 ```bash
-# Docker (auto-detect edge container name)
-docker ps --format '{{.Names}}' | grep -i edge | head -n 1 | xargs -I{} docker restart {}
+# Project-scoped (recommended; auto-suggested from Dokploy paths)
+name=$(docker ps --format '{{.Names}}' | grep -F 'financial-wisdom-supabase-oy2cqz' | grep -iE 'edge|functions' | head -n 1); [ -n "$name" ] || exit 1; docker restart "$name"
 
-# Docker Compose (local or remote)
-docker compose restart edge-runtime
+# Docker Compose from that stack's directory
+cd /etc/dokploy/compose/financial-wisdom-supabase-oy2cqz && docker compose restart
 
-# Docker Compose from stack directory on the server
-cd /etc/supabase/compose && docker compose restart edge-runtime
-
-# systemd
-systemctl restart supabase-edge-runtime
+# Explicit container name
+docker restart financial-wisdom-supabase-oy2cqz-supabase-edge-functions
 ```
+
+Avoid host-wide greps like `grep -i edge | head -n 1` when the server runs multiple Supabase projects — the CLI will refuse or auto-rewrite those defaults when it can derive the project id from your functions path.
 
 ## Roadmap
 

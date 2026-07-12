@@ -1,5 +1,7 @@
 # Supabase Selfhosted CLI
 
+![Supabase Selfhosted CLI Screenshot](assets/screenshot.png)
+
 CLI for **self-hosted Supabase** — on a VPS, in Docker on a remote server, or running locally on your machine. Wraps the repetitive work you do by hand: deploy edge functions, restart the runtime, push migrations, and regenerate TypeScript types.
 
 Inspired by the official Supabase CLI, but built for self-hosted layouts on your own VPS (Docker, Docker Compose, or bare metal) instead of Supabase Cloud.

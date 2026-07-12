@@ -4,7 +4,7 @@
 
 CLI for **self-hosted Supabase** — on a VPS, in Docker on a remote server, or running locally on your machine. Wraps the repetitive work you do by hand: deploy edge functions, restart the runtime, push migrations, and regenerate TypeScript types.
 
-Inspired by the official Supabase CLI, but built for self-hosted layouts on your own VPS (Docker, Docker Compose, or bare metal) instead of Supabase Cloud.
+So you've figured out how to use the port numbers to push migrations and sync types using the regular Supabase CLI. And credit where credit is due, Supabase really does work quite well with the " - db-url" flag. However, the entire process leaves something to be desired. Especially when dealing with real-time edge functions, as you have to keep tossing in the scp command with the right path, type in the VPS password and then restart the docker container.
 
 ## Install
 

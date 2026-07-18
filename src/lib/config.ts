@@ -375,7 +375,9 @@ export function buildDbUrl(
   const { tenantId, password, host, database } = config.database;
   const port = options?.port ?? getPrimaryDbPort(config, kind);
   const encodedPassword = encodeURIComponent(password);
-  return `postgresql://postgres.${tenantId}:${encodedPassword}@${host}:${port}/${database}`;
+  // Self-hosted Supavisor usually has no TLS. Recent supabase CLI versions
+  // require TLS for remote hosts unless sslmode=disable / PGSSLMODE=disable.
+  return `postgresql://postgres.${tenantId}:${encodedPassword}@${host}:${port}/${database}?sslmode=disable`;
 }
 
 export function maskSecret(value: string): string {

@@ -1,7 +1,38 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { logSuccess, withSpinner } from "./ui.js";
+import {
+  buildDbUrl,
+  getDbPortsWithFallback,
+  type SupabaseSelfhostedConfig,
+} from "./config.js";
+import { logSuccess, logWarning, withSpinner } from "./ui.js";
+
+export async function withDbPortFallback<T>(
+  config: SupabaseSelfhostedConfig,
+  kind: "push" | "types",
+  run: (dbUrl: string, port: number) => Promise<T>,
+): Promise<T> {
+  const ports = getDbPortsWithFallback(config, kind);
+  let lastError: unknown;
+
+  for (let index = 0; index < ports.length; index += 1) {
+    const port = ports[index]!;
+    try {
+      return await run(buildDbUrl(config, kind, { port }), port);
+    } catch (error) {
+      lastError = error;
+      const nextPort = ports[index + 1];
+      if (nextPort !== undefined) {
+        logWarning(
+          `Failed on port ${port}. Retrying with the other configured port (${nextPort})...`,
+        );
+      }
+    }
+  }
+
+  throw lastError;
+}
 
 function resolveSupabaseBinary(): string {
   const localBin = path.join(process.cwd(), "node_modules", ".bin", "supabase");

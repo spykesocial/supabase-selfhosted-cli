@@ -102,8 +102,10 @@ npm run build
 Replaces:
 
 ```bash
-npx supabase db push --db-url postgresql://postgres.your-tenant-id:...@host:5453/postgres --yes
+PGSSLMODE=disable npx supabase db push --db-url 'postgresql://postgres.your-tenant-id:...@host:5453/postgres?sslmode=disable' --yes
 ```
+
+Self-hosted Supavisor typically has no TLS. Recent Supabase CLI versions require TLS for remote `--db-url` hosts, so this CLI sets `PGSSLMODE=disable` (and `sslmode=disable` on the URL). That is also why bare `npx supabase db push --db-url ...` fails with `tls error (server refused TLS connection)` while the same command with `--debug` succeeds.
 
 ```bash
 supabase-selfhosted-cli db push
@@ -115,7 +117,7 @@ supabase-selfhosted-cli db push --debug
 Replaces:
 
 ```bash
-npx supabase gen types typescript --db-url postgresql://...@host:6438/postgres --schema public > database.types.ts
+PGSSLMODE=disable npx supabase gen types typescript --db-url 'postgresql://...@host:6438/postgres?sslmode=disable' --schema public > database.types.ts
 ```
 
 ```bash

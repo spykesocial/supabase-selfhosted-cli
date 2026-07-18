@@ -44,18 +44,18 @@ describe("buildDbUrl", () => {
 
     assert.equal(
       pushUrl,
-      "postgresql://postgres.your-tenant-id:db%2Fp%40ss@203.0.113.10:5453/postgres",
+      "postgresql://postgres.your-tenant-id:db%2Fp%40ss@203.0.113.10:5453/postgres?sslmode=disable",
     );
     assert.equal(
       typesUrl,
-      "postgresql://postgres.your-tenant-id:db%2Fp%40ss@203.0.113.10:6438/postgres",
+      "postgresql://postgres.your-tenant-id:db%2Fp%40ss@203.0.113.10:6438/postgres?sslmode=disable",
     );
   });
 
   it("honors an explicit port override", () => {
     assert.equal(
       buildDbUrl(sampleConfig, "push", { port: 6438 }),
-      "postgresql://postgres.your-tenant-id:db%2Fp%40ss@203.0.113.10:6438/postgres",
+      "postgresql://postgres.your-tenant-id:db%2Fp%40ss@203.0.113.10:6438/postgres?sslmode=disable",
     );
   });
 });

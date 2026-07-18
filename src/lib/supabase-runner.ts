@@ -43,17 +43,30 @@ function resolveSupabaseBinary(): string {
   return "npx";
 }
 
+function supabaseSpawnEnv(): NodeJS.ProcessEnv {
+  // supabase CLI forces TLS for remote --db-url hosts; --debug disables it as a
+  // side effect, which is why bare `npx supabase db push --db-url ... --debug`
+  // works against self-hosted Supavisor while the same URL without --debug fails.
+  // Prefer an explicit user override when set.
+  return {
+    ...process.env,
+    PGSSLMODE: process.env.PGSSLMODE ?? "disable",
+  };
+}
+
 function runSupabase(args: string[], options?: { cwd?: string; outputFile?: string }): void {
   const localBin = path.join(process.cwd(), "node_modules", ".bin", "supabase");
   const useNpx = !fs.existsSync(localBin);
   const command = useNpx ? "npx" : localBin;
   const finalArgs = useNpx ? ["supabase", ...args] : args;
+  const env = supabaseSpawnEnv();
 
   if (options?.outputFile) {
     const result = spawnSync(command, finalArgs, {
       cwd: options.cwd ?? process.cwd(),
       encoding: "utf8",
       shell: false,
+      env,
     });
 
     if (result.error) {
@@ -72,6 +85,7 @@ function runSupabase(args: string[], options?: { cwd?: string; outputFile?: stri
     cwd: options?.cwd ?? process.cwd(),
     stdio: "inherit",
     shell: false,
+    env,
   });
 
   if (result.error) {

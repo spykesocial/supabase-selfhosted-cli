@@ -2,6 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildDbUrl,
+  getAlternateDbPort,
+  getDbPortsWithFallback,
   maskSecret,
   suggestProfileName,
   type SupabaseSelfhostedConfig,
@@ -48,6 +50,30 @@ describe("buildDbUrl", () => {
       typesUrl,
       "postgresql://postgres.your-tenant-id:db%2Fp%40ss@203.0.113.10:6438/postgres",
     );
+  });
+
+  it("honors an explicit port override", () => {
+    assert.equal(
+      buildDbUrl(sampleConfig, "push", { port: 6438 }),
+      "postgresql://postgres.your-tenant-id:db%2Fp%40ss@203.0.113.10:6438/postgres",
+    );
+  });
+});
+
+describe("getDbPortsWithFallback", () => {
+  it("returns primary then alternate when ports differ", () => {
+    assert.deepEqual(getDbPortsWithFallback(sampleConfig, "push"), [5453, 6438]);
+    assert.deepEqual(getDbPortsWithFallback(sampleConfig, "types"), [6438, 5453]);
+    assert.equal(getAlternateDbPort(sampleConfig, "push"), 6438);
+  });
+
+  it("omits fallback when both ports are the same", () => {
+    const samePorts = {
+      ...sampleConfig,
+      database: { ...sampleConfig.database, pushPort: 5432, typesPort: 5432 },
+    };
+    assert.deepEqual(getDbPortsWithFallback(samePorts, "push"), [5432]);
+    assert.equal(getAlternateDbPort(samePorts, "types"), undefined);
   });
 });
 

@@ -1,11 +1,11 @@
 import path from "node:path";
 import {
-  buildDbUrl,
   formatProjectContextSummary,
+  getAlternateDbPort,
   resolveProjectContext,
 } from "../lib/config.js";
 import { requireConfig } from "../lib/require-config.js";
-import { generateTypeScriptTypes } from "../lib/supabase-runner.js";
+import { generateTypeScriptTypes, withDbPortFallback } from "../lib/supabase-runner.js";
 import { printSummaryBlock } from "../lib/ui.js";
 
 export async function runGenTypes(options?: {
@@ -20,11 +20,13 @@ export async function runGenTypes(options?: {
   }
 
   const context = resolveProjectContext(process.cwd(), options?.profile);
+  const alternatePort = getAlternateDbPort(config, "types");
   printSummaryBlock(
     "Generating types with",
     ...formatProjectContextSummary(context).split("\n"),
     `Target: ${config.target === "local" ? "local machine" : `${config.ssh.user}@${config.ssh.host}`}`,
-    `DB host: ${config.database.host}:${config.database.typesPort}`,
+    `DB host: ${config.database.host}:${config.database.typesPort}` +
+      (alternatePort !== undefined ? ` (fallback: ${alternatePort})` : ""),
     `DB tenant: postgres.${config.database.tenantId}`,
   );
 
@@ -32,11 +34,12 @@ export async function runGenTypes(options?: {
     process.cwd(),
     options?.output ?? "database.types.ts",
   );
-  const dbUrl = buildDbUrl(config, "types");
 
-  await generateTypeScriptTypes(dbUrl, outputFile, {
-    debug: options?.debug,
-    cwd: process.cwd(),
-    schema: options?.schema,
+  await withDbPortFallback(config, "types", async (dbUrl) => {
+    await generateTypeScriptTypes(dbUrl, outputFile, {
+      debug: options?.debug,
+      cwd: process.cwd(),
+      schema: options?.schema,
+    });
   });
 }

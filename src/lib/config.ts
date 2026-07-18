@@ -340,12 +340,40 @@ export function formatProfileTargetSummary(
   return `${config.ssh.user}@${config.ssh.host}`;
 }
 
+export function getPrimaryDbPort(
+  config: SupabaseSelfhostedConfig,
+  kind: "push" | "types",
+): number {
+  return kind === "push" ? config.database.pushPort : config.database.typesPort;
+}
+
+/** The other configured DB port (push ↔ types), when they differ. */
+export function getAlternateDbPort(
+  config: SupabaseSelfhostedConfig,
+  kind: "push" | "types",
+): number | undefined {
+  const primary = getPrimaryDbPort(config, kind);
+  const alternate = kind === "push" ? config.database.typesPort : config.database.pushPort;
+  return alternate === primary ? undefined : alternate;
+}
+
+/** Primary port first, then the other configured port if different. */
+export function getDbPortsWithFallback(
+  config: SupabaseSelfhostedConfig,
+  kind: "push" | "types",
+): number[] {
+  const primary = getPrimaryDbPort(config, kind);
+  const alternate = getAlternateDbPort(config, kind);
+  return alternate === undefined ? [primary] : [primary, alternate];
+}
+
 export function buildDbUrl(
   config: SupabaseSelfhostedConfig,
   kind: "push" | "types",
+  options?: { port?: number },
 ): string {
-  const { tenantId, password, host, pushPort, typesPort, database } = config.database;
-  const port = kind === "push" ? pushPort : typesPort;
+  const { tenantId, password, host, database } = config.database;
+  const port = options?.port ?? getPrimaryDbPort(config, kind);
   const encodedPassword = encodeURIComponent(password);
   return `postgresql://postgres.${tenantId}:${encodedPassword}@${host}:${port}/${database}`;
 }

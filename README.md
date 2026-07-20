@@ -42,29 +42,29 @@ The wizard asks where your instance runs:
 
 ### Remote server (VPS) example
 
-| Setting | Example |
-| --- | --- |
-| SSH user | `root` |
-| Server IP | `203.0.113.10` |
-| Functions destination | `/etc/supabase/volumes/functions` |
-| SSH password | stored once in `~/.supabase-selfhosted-cli/` |
-| Postgres tenant id | `your-tenant-id` (from `postgres.your-tenant-id`) |
-| DB password | your pooler password |
-| Migration port | `5453` |
-| Types port | `6438` |
-| Restart command | e.g. `docker restart <edge-container>` |
+| Setting               | Example                                           |
+| --------------------- | ------------------------------------------------- |
+| SSH user              | `root`                                            |
+| Server IP             | `203.0.113.10`                                    |
+| Functions destination | `/etc/supabase/volumes/functions`                 |
+| SSH password          | stored once in `~/.supabase-selfhosted-cli/`      |
+| Postgres tenant id    | `your-tenant-id` (from `postgres.your-tenant-id`) |
+| DB password           | your pooler password                              |
+| Migration port        | `5453`                                            |
+| Types port            | `6438`                                            |
+| Restart command       | e.g. `docker restart <edge-container>`            |
 
 ### Local Docker example
 
-| Setting | Example |
-| --- | --- |
+| Setting               | Example                                                                                        |
+| --------------------- | ---------------------------------------------------------------------------------------------- |
 | Functions destination | `/path/to/supabase/docker/volumes/functions` (absolute path to your edge-runtime volume mount) |
-| Database host | `127.0.0.1` |
-| Migration port | `5432` (or your exposed Postgres port) |
-| Types port | `5432` (or your exposed Postgres pooler port) | 
-| Restart command | `docker compose restart edge-runtime` or auto-detect edge container |
+| Database host         | `127.0.0.1`                                                                                    |
+| Migration port        | `5432` (or your exposed Postgres port)                                                         |
+| Types port            | `5432` (or your exposed Postgres pooler port)                                                  |
+| Restart command       | `docker compose restart edge-runtime` or auto-detect edge container                            |
 
-Setup creates `.supabase-selfhosted-cli.json` in your project so commands know which profile to use.
+Setup creates `.supabase-selfhosted-cli.json` in your project so commands know which environment profile(s) to use.
 
 ## Commands
 
@@ -142,23 +142,35 @@ supabase-selfhosted-cli settings
 
 Passwords are stored locally on your machine. Delete them anytime via `supabase-selfhosted-cli settings`.
 
-## Multiple projects / instances
+## Multiple projects / environments
 
-Each repo gets its own profile linked via `.supabase-selfhosted-cli.json`. Credentials live in `~/.supabase-selfhosted-cli/profiles/` and can point at different servers.
+One repo can link to **multiple** environment profiles (for example `development` and `production`). Credentials live in `~/.supabase-selfhosted-cli/profiles/`; the project link file stores the linked set plus which profile is **active**.
+
+`.supabase-selfhosted-cli.json` shape:
+
+```json
+{
+  "profiles": ["development", "production"],
+  "activeProfile": "development",
+  "profile": "development"
+}
+```
+
+Legacy single-field `{ "profile": "…" }` links still work and upgrade automatically.
 
 From a project directory:
 
 ```bash
-# See all linked projects and which server each profile uses
+# See linked projects and environments
 supabase-selfhosted-cli projects --list
 
-# First time in a new repo — creates profile "supabase-keepalive" from the folder name
+# First time — creates a profile (folder name, or pick development / production)
 supabase-selfhosted-cli setup
 
-# Link this repo to an existing profile (same or different server)
+# Add another environment without replacing the first
 supabase-selfhosted-cli projects --link
 
-# Point this repo at a different profile
+# Change which environment commands use by default
 supabase-selfhosted-cli projects --switch
 
 # Edit SSH/DB credentials for a profile
@@ -168,16 +180,17 @@ supabase-selfhosted-cli projects --edit
 supabase-selfhosted-cli projects --delete
 ```
 
-Named profiles still work with `-p`:
+Use `-p` to target an environment for a single command (does not change the active default):
 
 ```bash
 supabase-selfhosted-cli setup --profile production
+supabase-selfhosted-cli db push --profile production
 supabase-selfhosted-cli functions deploy --profile production
 ```
 
 ## Restart command tips
 
-Self-hosted setups differ. During setup, the CLI suggests a **mount-scoped** restart command derived from your functions path. It finds the edge-functions container that mounts that exact path — important on Dokploy, where the compose folder id can differ from the Docker container name (e.g. folder `...-oy2cqz` vs container `...-8rcgv9-supabase-edge-functions`).
+Self-hosted setups differ. During setup, the CLI suggests a **mount-scoped** restart command derived from your functions path. It finds the edge-functions container that mounts that exact path — important on Dokploy/Coolify, where the compose folder id can differ from the Docker container name (e.g. folder `...-oy2cqz` vs container `...-8rcgv9-supabase-edge-functions`).
 
 ```bash
 # Mount-scoped (recommended; auto-suggested)

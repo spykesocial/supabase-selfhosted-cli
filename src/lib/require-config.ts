@@ -1,5 +1,5 @@
 import { loadConfig, resolveProjectContext } from "./config.js";
-import { logError } from "./ui.js";
+import { logError, logWarning } from "./ui.js";
 
 export async function requireConfig(profile?: string) {
   const cwd = process.cwd();
@@ -19,9 +19,22 @@ export async function requireConfig(profile?: string) {
       logError(
         `No profile "${resolvedProfile}" found. Run \`supabase-selfhosted-cli setup -p ${resolvedProfile}\` first.`,
       );
+      if (context.profiles.length > 0) {
+        logError(`Linked profiles for this project: ${context.profiles.join(", ")}`);
+      }
     }
     process.exitCode = 1;
     return null;
+  }
+
+  if (
+    profile &&
+    context.profiles.length > 0 &&
+    !context.profiles.includes(profile)
+  ) {
+    logWarning(
+      `Profile "${profile}" is not linked to this project (linked: ${context.profiles.join(", ")}). Using it for this command only.`,
+    );
   }
 
   return config;

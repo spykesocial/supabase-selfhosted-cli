@@ -31,14 +31,14 @@ program
 
 program
   .command("projects")
-  .description("List, link, switch, edit, or delete project profiles")
+  .description("Add, switch, or manage project environments (e.g. development / production)")
   .option("-p, --profile <name>", "Profile name")
-  .option("--list", "List linked projects and profiles")
-  .option("--link", "Link this directory to a profile")
-  .option("--switch", "Switch this directory to a different profile")
-  .option("--show", "Show profile details for this directory")
+  .option("--list", "List linked projects and environments")
+  .option("--link", "Add an environment profile to this directory")
+  .option("--switch", "Switch the active environment for this directory")
+  .option("--show", "Show environment details for this directory")
   .option("--edit", "Edit profile credentials")
-  .option("--unlink", "Unlink this directory (keep profile)")
+  .option("--unlink", "Unlink one or all environments (keep credentials)")
   .option("--delete", "Delete a stored profile")
   .action(
     async (options: {

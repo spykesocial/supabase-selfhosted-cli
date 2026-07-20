@@ -16,6 +16,7 @@ import {
   type SupabaseSelfhostedConfig,
 } from "../lib/config.js";
 import { findSupabaseProjectRoot } from "../lib/paths.js";
+import { promptEnvironmentProfileName } from "../lib/profile-prompt.js";
 import {
   buildProjectScopedRestartCommand,
   isUnsafeGlobalRestartCommand,
@@ -61,10 +62,28 @@ export async function runSetup(options?: {
   profile?: string;
   linkProject?: boolean;
   forceUpdate?: boolean;
-}): Promise<SupabaseSelfhostedConfig> {
+}): Promise<SupabaseSelfhostedConfig | null> {
   const cwd = process.cwd();
   const context = resolveProjectContext(cwd, options?.profile);
-  const profile = options?.profile ?? context.suggestedProfileName;
+
+  let profile = options?.profile;
+  if (!profile) {
+    console.log(showBrandBanner());
+    const picked = await promptEnvironmentProfileName({
+      message: "Which environment profile are you setting up?",
+      defaultName: context.isLinked
+        ? (context.activeProfile ?? "development")
+        : "development",
+      allowCancel: true,
+      suggestedCustomName: context.suggestedProfileName,
+    });
+    if (picked.kind === "cancel" || picked.kind === "existing") {
+      logWarning("Setup cancelled.");
+      return null;
+    }
+    profile = picked.name;
+  }
+
   const existing = loadConfig(profile);
 
   if (existing && !options?.forceUpdate) {
@@ -79,7 +98,9 @@ export async function runSetup(options?: {
     }
   }
 
-  console.log(showBrandBanner());
+  if (options?.profile) {
+    console.log(showBrandBanner());
+  }
   logInfo(`Setting up profile "${profile}" for ${path.basename(context.projectRoot)}`);
   logInfo("These settings are stored locally in ~/.supabase-selfhosted-cli/");
   console.log("");
@@ -229,10 +250,17 @@ export async function runSetup(options?: {
     }
   }
 
+  const alreadyLinked = context.profiles.includes(profile);
+  const linkMessage = alreadyLinked
+    ? `Keep "${profile}" linked to this project and set it as active?`
+    : context.isLinked
+      ? `Add "${profile}" to this project's environments and make it active?`
+      : `Link this project to profile "${profile}" (.supabase-selfhosted-cli.json)?`;
+
   const linkProject =
     options?.linkProject ??
     (await confirm({
-      message: "Link this project directory to this profile (.supabase-selfhosted-cli.json)?",
+      message: linkMessage,
       default: true,
     }));
 
@@ -269,7 +297,13 @@ export async function runSetup(options?: {
 
   if (linkProject) {
     saveProjectLink(cwd, profile, path.basename(context.projectRoot));
-    logSuccess(`Linked ${context.projectRoot} to profile "${profile}".`);
+    const next = resolveProjectContext(cwd);
+    const linkedLabel = next.profiles.join(", ");
+    logSuccess(
+      next.profiles.length > 1
+        ? `Active profile "${profile}". Linked environments: ${linkedLabel}.`
+        : `Linked ${context.projectRoot} to profile "${profile}".`,
+    );
   }
 
   printSummaryBlock("Setup complete", ...formatConfigSummary(config).split("\n"));

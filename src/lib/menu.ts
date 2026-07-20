@@ -7,12 +7,13 @@ import { runGenTypes } from "../commands/gen-types.js";
 import { runProjects } from "../commands/projects.js";
 import { runSettings } from "../commands/settings.js";
 import { runSetup } from "../commands/setup.js";
-import { resolveProjectContext } from "./config.js";
+import { formatLinkedProfilesLabel, resolveProjectContext } from "./config.js";
 import {
   colors,
   formatHelp,
   formatVersion,
   hideCursor,
+  paint,
   showBrandBanner,
   showCursor,
   showHelp,
@@ -28,13 +29,9 @@ type MenuItem = {
 const MENU_ITEMS: MenuItem[] = [
   {
     label: "Setup",
-    description: "Configure credentials for this project",
+    description: "Configure an environment profile",
     run: async () => {
-      const context = resolveProjectContext(process.cwd());
-      await runSetup({
-        profile: context.isLinked ? context.profile : context.suggestedProfileName,
-        linkProject: true,
-      });
+      await runSetup({ linkProject: true });
     },
   },
   {
@@ -60,14 +57,14 @@ const MENU_ITEMS: MenuItem[] = [
   },
   {
     label: "Projects",
-    description: "List, link, switch, or delete project profiles",
+    description: "Add, switch, or manage environments",
     run: async () => {
       await runProjects();
     },
   },
   {
     label: "Settings",
-    description: "View or update stored profile",
+    description: "View or update active profile",
     run: async () => {
       await runSettings();
     },
@@ -81,13 +78,16 @@ function clearScreen(): void {
 function renderMenuContext(): string[] {
   const context = resolveProjectContext(process.cwd());
   const projectName = path.basename(context.projectRoot);
-  const profileLabel = context.isLinked
-    ? context.profile
-    : `(not linked — run Setup or Projects)`;
+  const envLabel = formatLinkedProfilesLabel(context);
+  const active = context.activeProfile ?? context.profile;
+  const looksProduction = /prod/i.test(active);
 
-  return [
-    `${colors.gray}Project: ${projectName}  ·  Profile: ${profileLabel}${colors.nc}`,
-  ];
+  const projectLine = `${colors.gray}Project: ${projectName}${colors.nc}`;
+  const envLine = looksProduction
+    ? `${colors.gray}Environment: ${colors.nc}${paint(envLabel, "yellow")}`
+    : `${colors.gray}Environment: ${envLabel}${colors.nc}`;
+
+  return [projectLine, envLine];
 }
 
 function clearLine(): string {

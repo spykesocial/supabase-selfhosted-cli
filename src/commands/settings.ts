@@ -31,11 +31,11 @@ export async function runSettings(options?: { profile?: string }): Promise<void>
   }
 
   const action = await select({
-    message: "Settings",
+    message: `Settings · ${profile}${context.profiles.length > 1 ? ` (active of ${context.profiles.length})` : ""}`,
     choices: [
       { name: "Show current configuration", value: "show" },
       { name: "Re-run setup wizard (update credentials)", value: "setup" },
-      { name: "Manage projects / switch profile", value: "projects" },
+      { name: "Manage environments (add / switch / unlink)", value: "projects" },
       { name: "Delete stored credentials for this profile", value: "delete" },
       { name: "Cancel", value: "cancel" },
     ],

@@ -2,10 +2,13 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildDbUrl,
+  formatLinkedProfilesLabel,
   getAlternateDbPort,
   getDbPortsWithFallback,
   maskSecret,
+  normalizeProjectLink,
   suggestProfileName,
+  type ProjectContext,
   type SupabaseSelfhostedConfig,
 } from "./config.js";
 
@@ -101,5 +104,79 @@ describe("loadConfig normalization", () => {
   it("defaults missing target to ssh", () => {
     const normalized = { ...sampleConfig, target: sampleConfig.target ?? "ssh" };
     assert.equal(normalized.target, "ssh");
+  });
+});
+
+describe("normalizeProjectLink", () => {
+  it("upgrades a legacy single-profile link", () => {
+    assert.deepEqual(normalizeProjectLink({ profile: "development" }), {
+      profiles: ["development"],
+      activeProfile: "development",
+      profile: "development",
+    });
+  });
+
+  it("keeps multiple profiles and an active selection", () => {
+    assert.deepEqual(
+      normalizeProjectLink({
+        profiles: ["development", "production"],
+        activeProfile: "production",
+      }),
+      {
+        profiles: ["development", "production"],
+        activeProfile: "production",
+        profile: "production",
+      },
+    );
+  });
+
+  it("falls back to the first profile when active is missing from the set", () => {
+    assert.deepEqual(
+      normalizeProjectLink({
+        profiles: ["development", "production"],
+        activeProfile: "staging",
+      }),
+      {
+        profiles: ["development", "production"],
+        activeProfile: "development",
+        profile: "development",
+      },
+    );
+  });
+
+  it("returns null for empty links", () => {
+    assert.equal(normalizeProjectLink({}), null);
+    assert.equal(normalizeProjectLink(null), null);
+  });
+});
+
+describe("formatLinkedProfilesLabel", () => {
+  it("describes unlinked projects", () => {
+    const context: ProjectContext = {
+      cwd: "/tmp/app",
+      projectRoot: "/tmp/app",
+      profile: "app",
+      profiles: [],
+      activeProfile: null,
+      isLinked: false,
+      suggestedProfileName: "app",
+    };
+    assert.match(formatLinkedProfilesLabel(context), /not linked/);
+  });
+
+  it("shows active and additional environments", () => {
+    const context: ProjectContext = {
+      cwd: "/tmp/app",
+      projectRoot: "/tmp/app",
+      profile: "development",
+      profiles: ["development", "production"],
+      activeProfile: "development",
+      isLinked: true,
+      suggestedProfileName: "app",
+    };
+    assert.equal(
+      formatLinkedProfilesLabel(context),
+      "development  ·  also: production",
+    );
   });
 });

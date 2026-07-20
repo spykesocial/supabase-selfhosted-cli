@@ -37,13 +37,26 @@ export type SupabaseSelfhostedConfig = {
   updatedAt: string;
 };
 
+/** On-disk project link. Legacy files may only have `profile`. */
 export type ProjectLink = {
+  profiles: string[];
+  activeProfile: string;
+  /** @deprecated Prefer `activeProfile`; kept for backward-compatible writes. */
   profile: string;
+};
+
+export type ProjectLinkRaw = {
+  profile?: string;
+  profiles?: string[];
+  activeProfile?: string;
 };
 
 export type ProjectEntry = {
   path: string;
+  /** Active profile (legacy field retained for display/compat). */
   profile: string;
+  profiles: string[];
+  activeProfile: string;
   name: string;
   linkedAt: string;
 };
@@ -55,7 +68,10 @@ export type ProjectRegistry = {
 export type ProjectContext = {
   cwd: string;
   projectRoot: string;
+  /** Profile used for this resolution (explicit override or active). */
   profile: string;
+  profiles: string[];
+  activeProfile: string | null;
   isLinked: boolean;
   suggestedProfileName: string;
 };
@@ -124,6 +140,7 @@ export function deleteConfig(profile = DEFAULT_PROFILE): boolean {
   }
 
   fs.unlinkSync(filePath);
+  detachProfileFromProjects(profile);
   return true;
 }
 
@@ -139,14 +156,80 @@ export function listProfiles(): string[] {
     .map((name) => name.replace(/\.json$/, ""));
 }
 
+export function normalizeProjectLink(raw: ProjectLinkRaw | null | undefined): ProjectLink | null {
+  if (!raw) {
+    return null;
+  }
+
+  const fromList = Array.isArray(raw.profiles)
+    ? raw.profiles.filter((name): name is string => typeof name === "string" && name.trim().length > 0)
+    : [];
+  const legacy = typeof raw.profile === "string" && raw.profile.trim() ? raw.profile.trim() : null;
+  const activeCandidate =
+    typeof raw.activeProfile === "string" && raw.activeProfile.trim()
+      ? raw.activeProfile.trim()
+      : legacy;
+
+  const profiles = [...new Set(fromList.length > 0 ? fromList : legacy ? [legacy] : [])];
+  if (profiles.length === 0) {
+    return null;
+  }
+
+  const activeProfile =
+    activeCandidate && profiles.includes(activeCandidate)
+      ? activeCandidate
+      : profiles[0];
+
+  return {
+    profiles,
+    activeProfile,
+    profile: activeProfile,
+  };
+}
+
+function readProjectLinkAt(dir: string): ProjectLink | null {
+  const linkPath = projectLinkPath(dir);
+  if (!fs.existsSync(linkPath)) {
+    return null;
+  }
+
+  const raw = JSON.parse(fs.readFileSync(linkPath, "utf8")) as ProjectLinkRaw;
+  return normalizeProjectLink(raw);
+}
+
+function writeProjectLinkFile(projectRoot: string, link: ProjectLink): void {
+  const normalized = normalizeProjectLink(link);
+  if (!normalized) {
+    throw new Error("Cannot write an empty project link");
+  }
+
+  fs.writeFileSync(
+    projectLinkPath(projectRoot),
+    `${JSON.stringify(
+      {
+        profiles: normalized.profiles,
+        activeProfile: normalized.activeProfile,
+        profile: normalized.activeProfile,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
+/** Returns the active profile name for a project, or null if unlinked. */
 export function loadProjectLink(cwd: string): string | null {
+  return loadProjectLinkData(cwd)?.activeProfile ?? null;
+}
+
+/** Returns the full normalized project link, walking up from cwd. */
+export function loadProjectLinkData(cwd: string): ProjectLink | null {
   let current = normalizeProjectPath(cwd);
 
   while (true) {
-    const linkPath = projectLinkPath(current);
-    if (fs.existsSync(linkPath)) {
-      const link = JSON.parse(fs.readFileSync(linkPath, "utf8")) as ProjectLink;
-      return link.profile;
+    const link = readProjectLinkAt(current);
+    if (link) {
+      return link;
     }
 
     const parent = path.dirname(current);
@@ -186,24 +269,28 @@ export function resolveProjectContext(
   const normalizedCwd = normalizeProjectPath(cwd);
   const projectRoot = resolveProjectRoot(normalizedCwd);
   const suggestedProfileName = suggestProfileName(projectRoot);
-  const linkedProfile = loadProjectLink(normalizedCwd);
+  const link = loadProjectLinkData(normalizedCwd);
 
   if (explicitProfile) {
     return {
       cwd: normalizedCwd,
       projectRoot,
       profile: explicitProfile,
-      isLinked: linkedProfile === explicitProfile,
+      profiles: link?.profiles ?? [],
+      activeProfile: link?.activeProfile ?? null,
+      isLinked: Boolean(link?.profiles.includes(explicitProfile)),
       suggestedProfileName,
     };
   }
 
-  if (linkedProfile) {
-    ensureProjectRegistered(projectRoot, linkedProfile);
+  if (link) {
+    ensureProjectRegistered(projectRoot, link);
     return {
       cwd: normalizedCwd,
       projectRoot,
-      profile: linkedProfile,
+      profile: link.activeProfile,
+      profiles: link.profiles,
+      activeProfile: link.activeProfile,
       isLinked: true,
       suggestedProfileName,
     };
@@ -213,6 +300,8 @@ export function resolveProjectContext(
     cwd: normalizedCwd,
     projectRoot,
     profile: suggestedProfileName,
+    profiles: [],
+    activeProfile: null,
     isLinked: false,
     suggestedProfileName,
   };
@@ -235,39 +324,90 @@ function saveProjectRegistry(registry: ProjectRegistry): void {
 }
 
 export function listRegisteredProjects(): ProjectEntry[] {
-  return loadProjectRegistry().projects.sort((left, right) =>
-    left.name.localeCompare(right.name),
-  );
+  return loadProjectRegistry()
+    .projects.map((entry) => normalizeProjectEntry(entry))
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
-function ensureProjectRegistered(projectRoot: string, profile: string): void {
+function ensureProjectRegistered(projectRoot: string, link: ProjectLink): void {
   const normalizedPath = normalizeProjectPath(projectRoot);
   const registry = loadProjectRegistry();
-  if (registry.projects.some((project) => project.path === normalizedPath)) {
+  const existing = registry.projects.find((project) => project.path === normalizedPath);
+  if (
+    existing &&
+    existing.activeProfile === link.activeProfile &&
+    sameProfileSet(existing.profiles ?? [existing.profile], link.profiles)
+  ) {
     return;
   }
 
-  registerProject(normalizedPath, profile);
+  registerProject(normalizedPath, link, existing?.name);
+}
+
+function sameProfileSet(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  const sortedLeft = [...left].sort();
+  const sortedRight = [...right].sort();
+  return sortedLeft.every((name, index) => name === sortedRight[index]);
+}
+
+function normalizeProjectEntry(entry: ProjectEntry): ProjectEntry {
+  const link = normalizeProjectLink({
+    profile: entry.profile,
+    profiles: entry.profiles,
+    activeProfile: entry.activeProfile ?? entry.profile,
+  });
+
+  if (!link) {
+    return {
+      ...entry,
+      profiles: entry.profile ? [entry.profile] : [],
+      activeProfile: entry.profile,
+      profile: entry.profile,
+    };
+  }
+
+  return {
+    ...entry,
+    profiles: link.profiles,
+    activeProfile: link.activeProfile,
+    profile: link.activeProfile,
+  };
 }
 
 export function registerProject(
   cwd: string,
-  profile: string,
+  linkOrProfile: ProjectLink | string,
   name?: string,
 ): ProjectEntry {
   const projectRoot = resolveProjectRoot(cwd);
   const normalizedPath = normalizeProjectPath(projectRoot);
-  const entry: ProjectEntry = {
-    path: normalizedPath,
-    profile,
-    name: name ?? path.basename(normalizedPath),
-    linkedAt: new Date().toISOString(),
-  };
+  const link =
+    typeof linkOrProfile === "string"
+      ? normalizeProjectLink({ profile: linkOrProfile })
+      : normalizeProjectLink(linkOrProfile);
+
+  if (!link) {
+    throw new Error("Cannot register a project without at least one profile");
+  }
 
   const registry = loadProjectRegistry();
   const existingIndex = registry.projects.findIndex(
     (project) => project.path === normalizedPath,
   );
+  const existing = existingIndex >= 0 ? registry.projects[existingIndex] : undefined;
+
+  const entry: ProjectEntry = {
+    path: normalizedPath,
+    profile: link.activeProfile,
+    profiles: link.profiles,
+    activeProfile: link.activeProfile,
+    name: name ?? existing?.name ?? path.basename(normalizedPath),
+    linkedAt: existing?.linkedAt ?? new Date().toISOString(),
+  };
 
   if (existingIndex >= 0) {
     registry.projects[existingIndex] = entry;
@@ -295,12 +435,94 @@ export function unregisterProject(cwd: string): boolean {
   return true;
 }
 
+/**
+ * Add a profile to the project's linked set and make it active.
+ * Existing linked profiles are preserved.
+ */
 export function saveProjectLink(cwd: string, profile: string, name?: string): void {
+  addProjectProfile(cwd, profile, { makeActive: true, name });
+}
+
+export function addProjectProfile(
+  cwd: string,
+  profile: string,
+  options?: { makeActive?: boolean; name?: string },
+): ProjectLink {
   const projectRoot = resolveProjectRoot(cwd);
-  const linkPath = projectLinkPath(projectRoot);
-  const link: ProjectLink = { profile };
-  fs.writeFileSync(linkPath, `${JSON.stringify(link, null, 2)}\n`);
-  registerProject(projectRoot, profile, name);
+  const existing = readProjectLinkAt(projectRoot);
+  const profiles = [...new Set([...(existing?.profiles ?? []), profile])];
+  const makeActive = options?.makeActive ?? !existing;
+  const activeProfile = makeActive
+    ? profile
+    : (existing?.activeProfile && profiles.includes(existing.activeProfile)
+        ? existing.activeProfile
+        : profile);
+
+  const link: ProjectLink = {
+    profiles,
+    activeProfile,
+    profile: activeProfile,
+  };
+
+  writeProjectLinkFile(projectRoot, link);
+  registerProject(projectRoot, link, options?.name);
+  return link;
+}
+
+export function setActiveProjectProfile(cwd: string, profile: string): ProjectLink {
+  const projectRoot = resolveProjectRoot(cwd);
+  const existing = readProjectLinkAt(projectRoot);
+  if (!existing) {
+    return addProjectProfile(cwd, profile, { makeActive: true });
+  }
+
+  if (!existing.profiles.includes(profile)) {
+    return addProjectProfile(cwd, profile, { makeActive: true });
+  }
+
+  const link: ProjectLink = {
+    profiles: existing.profiles,
+    activeProfile: profile,
+    profile,
+  };
+
+  writeProjectLinkFile(projectRoot, link);
+  registerProject(projectRoot, link);
+  return link;
+}
+
+/**
+ * Remove one profile from the project link.
+ * Returns the updated link, or null if the project became fully unlinked.
+ */
+export function removeProjectProfile(cwd: string, profile: string): ProjectLink | null {
+  const linkRoot = findProjectLinkRoot(cwd);
+  if (!linkRoot) {
+    return null;
+  }
+
+  const existing = readProjectLinkAt(linkRoot);
+  if (!existing) {
+    return null;
+  }
+
+  const profiles = existing.profiles.filter((name) => name !== profile);
+  if (profiles.length === 0) {
+    removeProjectLink(linkRoot);
+    return null;
+  }
+
+  const activeProfile =
+    existing.activeProfile === profile ? profiles[0] : existing.activeProfile;
+  const link: ProjectLink = {
+    profiles,
+    activeProfile,
+    profile: activeProfile,
+  };
+
+  writeProjectLinkFile(linkRoot, link);
+  registerProject(linkRoot, link);
+  return link;
 }
 
 export function removeProjectLink(cwd: string): boolean {
@@ -314,6 +536,45 @@ export function removeProjectLink(cwd: string): boolean {
   return true;
 }
 
+/** Drop a deleted profile from every project link / registry entry. */
+export function detachProfileFromProjects(profile: string): void {
+  const registry = loadProjectRegistry();
+  const nextProjects: ProjectEntry[] = [];
+
+  for (const entry of registry.projects) {
+    const normalized = normalizeProjectEntry(entry);
+    if (!normalized.profiles.includes(profile)) {
+      nextProjects.push(normalized);
+      continue;
+    }
+
+    const nextProfiles = normalized.profiles.filter((name) => name !== profile);
+    if (nextProfiles.length === 0) {
+      if (fs.existsSync(projectLinkPath(normalized.path))) {
+        fs.unlinkSync(projectLinkPath(normalized.path));
+      }
+      continue;
+    }
+
+    const activeProfile =
+      normalized.activeProfile === profile ? nextProfiles[0] : normalized.activeProfile;
+    const link: ProjectLink = {
+      profiles: nextProfiles,
+      activeProfile,
+      profile: activeProfile,
+    };
+    writeProjectLinkFile(normalized.path, link);
+    nextProjects.push({
+      ...normalized,
+      profiles: nextProfiles,
+      activeProfile,
+      profile: activeProfile,
+    });
+  }
+
+  saveProjectRegistry({ projects: nextProjects });
+}
+
 export function formatProjectContextSummary(context: ProjectContext): string {
   const projectLabel = path.basename(context.projectRoot);
   const lines = [
@@ -321,13 +582,39 @@ export function formatProjectContextSummary(context: ProjectContext): string {
     `Directory: ${context.projectRoot}`,
   ];
 
-  if (context.isLinked) {
-    lines.push(`Profile: ${context.profile}`);
+  if (context.isLinked || context.profiles.length > 0) {
+    const linked = context.profiles.length > 0 ? context.profiles : [context.profile];
+    const active = context.activeProfile ?? context.profile;
+    if (active !== context.profile) {
+      lines.push(`Using profile: ${context.profile} (active default: ${active})`);
+    } else {
+      lines.push(`Active profile: ${active}`);
+    }
+    lines.push(
+      linked.length === 1
+        ? `Linked profiles: ${linked[0]}`
+        : `Linked profiles: ${linked.join(", ")}`,
+    );
   } else {
-    lines.push(`Profile: (not linked — suggested: ${context.suggestedProfileName})`);
+    lines.push(`Active profile: (not linked — suggested: ${context.suggestedProfileName})`);
+    lines.push("Linked profiles: (none)");
   }
 
   return lines.join("\n");
+}
+
+export function formatLinkedProfilesLabel(context: ProjectContext): string {
+  if (!context.isLinked && context.profiles.length === 0) {
+    return "(not linked — run Setup or Projects)";
+  }
+
+  const active = context.activeProfile ?? context.profile;
+  if (context.profiles.length <= 1) {
+    return active;
+  }
+
+  const others = context.profiles.filter((name) => name !== active);
+  return `${active}  ·  also: ${others.join(", ")}`;
 }
 
 export function formatProfileTargetSummary(

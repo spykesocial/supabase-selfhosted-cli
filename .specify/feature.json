@@ -1,1 +1,3 @@
-{"feature_directory":"specs/001-vps-cli"}
+{
+  "feature_directory": "specs/002-project-multi-profiles"
+}

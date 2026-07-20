@@ -2,7 +2,7 @@ import os from "node:os";
 import process from "node:process";
 import { CONFIG_DIR, listProfiles, listRegisteredProjects } from "./config.js";
 
-export const VERSION = "0.2.5";
+export const VERSION = "0.2.6";
 export const BRAND_NAME = "Velocilabs";
 export const BRAND_URL = "https://velocilabs.com";
 export const SPYKE_URL = "https://spyke.social";
@@ -217,8 +217,8 @@ type HelpEntry = {
 
 const COMMAND_ENTRIES: HelpEntry[] = [
   { command: "supabase-selfhosted-cli", description: "Main menu" },
-  { command: "setup", description: "Interactive setup wizard for this project" },
-  { command: "projects", description: "List, link, switch, edit, or delete profiles" },
+  { command: "setup", description: "Create or update an environment profile" },
+  { command: "projects", description: "Add, switch, or manage project environments" },
   { command: "settings", description: "View, update, or delete stored credentials" },
   { command: "functions deploy", description: "Deploy local supabase/functions" },
   { command: "db push", description: "Push local migrations with supabase db push" },
@@ -226,12 +226,13 @@ const COMMAND_ENTRIES: HelpEntry[] = [
 ];
 
 const EXAMPLE_ENTRIES: HelpEntry[] = [
-  { command: "projects --list", description: "Show all linked projects and servers" },
-  { command: "projects --link", description: "Link this repo to a profile" },
-  { command: "setup -p staging", description: "Create a named profile" },
+  { command: "projects --list", description: "Show projects and linked environments" },
+  { command: "projects --link", description: "Add development or production profile" },
+  { command: "projects --switch", description: "Change the active environment" },
+  { command: "setup -p production", description: "Create a production profile" },
+  { command: "db push -p production", description: "Push migrations to production once" },
   { command: "functions deploy --prune", description: "Deploy and remove remote-only files" },
   { command: "functions deploy --no-restart", description: "Deploy without restarting runtime" },
-  { command: "db push --debug", description: "Push migrations with supabase debug logs" },
   { command: "gen types -o src/types/database.ts", description: "Write types to a custom path" },
 ];
 
@@ -253,7 +254,7 @@ export function formatHelp(): string {
     formatHelpSection("COMMANDS", COMMAND_ENTRIES),
     formatHelpSection("EXAMPLES", EXAMPLE_ENTRIES),
     paint("OPTIONS", "blue"),
-    `  ${paintBrand("-p, --profile <name>".padEnd(28))} Use a stored profile`,
+    `  ${paintBrand("-p, --profile <name>".padEnd(28))} Use a profile for this command`,
     `  ${paintBrand("-h, --help".padEnd(28))} Show this help message`,
     `  ${paintBrand("-V, --version".padEnd(28))} Show version information`,
     "",

@@ -9,12 +9,14 @@ So you've figured out how to use the port numbers to push migrations and sync ty
 ## Install
 
 ```bash
-npm install -g supabase-selfhosted-cli
+yarn global add supabase-selfhosted-cli
 ```
 
 ```bash
-yarn global add supabase-selfhosted-cli
+npm install -g supabase-selfhosted-cli
 ```
+
+
 
 Or run from source:
 
@@ -30,6 +32,11 @@ You still need the [Supabase CLI](https://supabase.com/docs/guides/cli) installe
 ## Quick start
 
 From your project root (where `supabase/migrations` lives):
+
+```bash
+supabase-selfhosted-cli
+```
+or if you just want to setup
 
 ```bash
 supabase-selfhosted-cli setup

@@ -1,6 +1,6 @@
 # Supabase Selfhosted CLI
 
-CLI for **self-hosted Supabase** — on a VPS, in Docker on a remote server, or running locally on your machine. Wraps the repetitive work you do by hand: deploy edge functions, restart the runtime, push migrations, and regenerate TypeScript types. 
+CLI for **self hosted Supabase** — on a VPS, in Docker on a remote server, or running locally on your machine. Wraps the repetitive work you do by hand: deploy edge functions, restart the runtime, push migrations, and regenerate TypeScript types. 
 
 As featured on https://spyke.social
 
@@ -13,6 +13,7 @@ So you've figured out how to use the port numbers to push migrations and sync ty
 ```bash
 yarn global add supabase-selfhosted-cli
 ```
+or
 
 ```bash
 npm install -g supabase-selfhosted-cli

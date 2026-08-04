@@ -74,6 +74,7 @@ functionsCommand
   .option("--restart", "Restart Supabase after deploy")
   .option("--no-restart", "Skip restart after deploy")
   .option("--prune", "Remove destination files and folders not present locally")
+  .option("--no-prune", "Skip pruning destination")
   .action(async (options: { profile?: string; restart?: boolean; prune?: boolean }) => {
     await runFunctionsDeploy(options);
   });

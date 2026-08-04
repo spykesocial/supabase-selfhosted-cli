@@ -69,6 +69,41 @@ function pruneLocalDirectory(
   return pruned;
 }
 
+export function listPrunableLocalPaths(localDir: string, targetDir: string): string[] {
+  const result: string[] = [];
+  collectPrunableLocalPaths(localDir, targetDir, result);
+  return result;
+}
+
+function collectPrunableLocalPaths(
+  localDir: string,
+  targetDir: string,
+  collector: string[],
+): void {
+  if (!fs.existsSync(targetDir)) {
+    return;
+  }
+
+  const localEntries = listLocalEntries(localDir);
+  const targetEntries = fs.readdirSync(targetDir, { withFileTypes: true });
+  const localByName = new Map(localEntries.map((entry) => [entry.name, entry]));
+
+  for (const targetEntry of targetEntries) {
+    const localEntry = localByName.get(targetEntry.name);
+    const localPath = path.join(localDir, targetEntry.name);
+    const entryPath = path.join(targetDir, targetEntry.name);
+
+    if (!localEntry) {
+      collector.push(targetEntry.name);
+      continue;
+    }
+
+    if (targetEntry.isDirectory() && localEntry.isDirectory) {
+      collectPrunableLocalPaths(localPath, entryPath, collector);
+    }
+  }
+}
+
 export async function deployFunctionsLocal(
   config: SupabaseSelfhostedConfig,
   localFunctionsPath: string,

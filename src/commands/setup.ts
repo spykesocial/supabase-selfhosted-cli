@@ -218,6 +218,11 @@ export async function runSetup(options?: {
     default: existing?.deploy.restartAfterDeploy ?? true,
   });
 
+  const pruneAfterDeploy = await confirm({
+    message: "Prune removed functions by default? (Deletes destination files not present locally)",
+    default: existing?.deploy.pruneAfterDeploy ?? false,
+  });
+
   let restartCommand = existing?.deploy.restartCommand ?? "";
   if (restartAfterDeploy) {
     const restartPrompt =
@@ -288,6 +293,7 @@ export async function runSetup(options?: {
     deploy: {
       restartAfterDeploy,
       restartCommand: restartCommand.trim(),
+      pruneAfterDeploy,
     },
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,

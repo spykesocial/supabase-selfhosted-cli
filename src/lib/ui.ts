@@ -1,8 +1,28 @@
+import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
+import { dirname, join } from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { CONFIG_DIR, listProfiles, listRegisteredProjects } from "./config.js";
 
-export const VERSION = "0.2.6";
+function readPackageVersion(): string {
+  try {
+    const candidates = [
+      join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"),
+      join(dirname(fileURLToPath(import.meta.url)), "..", "..", "package.json"),
+    ];
+    for (const pkgPath of candidates) {
+      if (existsSync(pkgPath)) {
+        return JSON.parse(readFileSync(pkgPath, "utf8")).version;
+      }
+    }
+  } catch {
+    // fall through
+  }
+  return "0.0.0";
+}
+
+export const VERSION = readPackageVersion();
 export const BRAND_NAME = "Velocilabs";
 export const BRAND_URL = "https://velocilabs.com";
 export const SPYKE_URL = "https://spyke.social";

@@ -3,7 +3,7 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import type { SupabaseSelfhostedConfig } from "./config.js";
 import { saveConfig } from "./config.js";
-import { joinRemotePath, listLocalEntries } from "./function-sync.js";
+import { joinRemotePath, listLocalEntries, PROTECTED_NAMES } from "./function-sync.js";
 import {
   persistScopedRestartCommand,
   resolveRestartCommand,
@@ -55,6 +55,9 @@ function pruneLocalDirectory(
     const entryPath = joinRemotePath(targetDir, targetEntry.name);
 
     if (!localEntry) {
+      if (PROTECTED_NAMES.has(targetEntry.name)) {
+        continue;
+      }
       fs.rmSync(entryPath, { recursive: true, force: true });
       onPrune?.(entryPath.slice(targetRoot.length + 1));
       pruned += 1;
@@ -94,7 +97,9 @@ function collectPrunableLocalPaths(
     const entryPath = path.join(targetDir, targetEntry.name);
 
     if (!localEntry) {
-      collector.push(targetEntry.name);
+      if (!PROTECTED_NAMES.has(targetEntry.name)) {
+        collector.push(targetEntry.name);
+      }
       continue;
     }
 

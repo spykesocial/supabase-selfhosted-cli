@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+export const PROTECTED_NAMES: ReadonlySet<string> = new Set(["main"]);
+
 export type LocalEntry = {
   name: string;
   isDirectory: boolean;
@@ -18,7 +20,9 @@ export function findPrunableRemoteEntries(
   remoteNames: string[],
 ): string[] {
   const localNames = new Set(localEntries.map((entry) => entry.name));
-  return remoteNames.filter((name) => !localNames.has(name)).sort();
+  return remoteNames
+    .filter((name) => !PROTECTED_NAMES.has(name) && !localNames.has(name))
+    .sort();
 }
 
 export function joinRemotePath(remoteDir: string, name: string): string {

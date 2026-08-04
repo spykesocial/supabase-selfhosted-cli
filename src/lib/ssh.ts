@@ -142,6 +142,62 @@ async function pruneDirectory(
   return pruned;
 }
 
+export async function listPrunableRemotePaths(
+  config: SupabaseSelfhostedConfig,
+  localDir: string,
+): Promise<string[]> {
+  const sftp = new SftpClient();
+  const collector: string[] = [];
+
+  try {
+    await sftp.connect({
+      host: config.ssh.host,
+      port: 22,
+      username: config.ssh.user,
+      password: config.ssh.password,
+      readyTimeout: 20_000,
+    });
+
+    await collectPrunableRemotePaths(sftp, localDir, config.functions.remotePath, collector);
+    return collector;
+  } finally {
+    await sftp.end();
+  }
+}
+
+async function collectPrunableRemotePaths(
+  sftp: SftpClient,
+  localDir: string,
+  remoteDir: string,
+  collector: string[],
+): Promise<void> {
+  const localEntries = listLocalEntries(localDir);
+  let remoteEntries: Array<{ name: string; type: string }>;
+
+  try {
+    remoteEntries = await sftp.list(remoteDir);
+  } catch {
+    return;
+  }
+
+  const localByName = new Map(localEntries.map((entry) => [entry.name, entry]));
+
+  for (const remoteEntry of remoteEntries) {
+    const localEntry = localByName.get(remoteEntry.name);
+    const localPath = path.join(localDir, remoteEntry.name);
+    const remotePath = joinRemotePath(remoteDir, remoteEntry.name);
+
+    if (!localEntry) {
+      collector.push(remoteEntry.name);
+      continue;
+    }
+
+    if (remoteEntry.type === "d" && localEntry.isDirectory) {
+      await collectPrunableRemotePaths(sftp, localPath, remotePath, collector);
+    }
+  }
+}
+
 export async function deployFunctionsDirectory(
   config: SupabaseSelfhostedConfig,
   localFunctionsPath: string,

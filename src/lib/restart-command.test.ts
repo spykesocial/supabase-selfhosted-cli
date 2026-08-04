@@ -33,6 +33,7 @@ function baseConfig(
     deploy: {
       restartAfterDeploy: true,
       restartCommand: UNSAFE_GLOBAL_EDGE_RESTART,
+      pruneAfterDeploy: false,
     },
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -121,7 +122,7 @@ describe("resolveRestartCommand", () => {
 
     const resolved = resolveRestartCommand(
       baseConfig({
-        deploy: { restartAfterDeploy: true, restartCommand: oldNameBased },
+        deploy: { restartAfterDeploy: true, restartCommand: oldNameBased, pruneAfterDeploy: false },
       }),
     );
 
@@ -135,7 +136,7 @@ describe("resolveRestartCommand", () => {
       "docker restart financial-wisdom-supabase-8rcgv9-supabase-edge-functions";
     const resolved = resolveRestartCommand(
       baseConfig({
-        deploy: { restartAfterDeploy: true, restartCommand: custom },
+        deploy: { restartAfterDeploy: true, restartCommand: custom, pruneAfterDeploy: false },
       }),
     );
     assert.equal(resolved.autoScoped, false);

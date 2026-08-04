@@ -32,6 +32,7 @@ export type SupabaseSelfhostedConfig = {
   deploy: {
     restartAfterDeploy: boolean;
     restartCommand: string;
+    pruneAfterDeploy: boolean;
   };
   createdAt: string;
   updatedAt: string;
@@ -120,6 +121,10 @@ function normalizeConfig(raw: SupabaseSelfhostedConfig): SupabaseSelfhostedConfi
   return {
     ...raw,
     target: raw.target ?? "ssh",
+    deploy: {
+      ...raw.deploy,
+      pruneAfterDeploy: raw.deploy?.pruneAfterDeploy ?? false,
+    },
   };
 }
 
@@ -697,6 +702,7 @@ export function formatConfigSummary(config: SupabaseSelfhostedConfig): string {
     `DB push port: ${config.database.pushPort}`,
     `DB types port: ${config.database.typesPort}`,
     `Restart after deploy: ${config.deploy.restartAfterDeploy ? "yes" : "no"}`,
+    `Prune after deploy: ${config.deploy.pruneAfterDeploy ? "yes" : "no"}`,
     `Restart command: ${config.deploy.restartCommand || "(not set)"}`,
   );
 

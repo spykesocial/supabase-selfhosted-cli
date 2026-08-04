@@ -35,6 +35,7 @@ const sampleConfig: SupabaseSelfhostedConfig = {
   deploy: {
     restartAfterDeploy: true,
     restartCommand: "docker restart edge-runtime",
+    pruneAfterDeploy: false,
   },
   createdAt: "2026-06-18T00:00:00.000Z",
   updatedAt: "2026-06-18T00:00:00.000Z",

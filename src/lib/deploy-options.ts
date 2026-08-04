@@ -20,3 +20,18 @@ export function resolveShouldRestart(
 
   return config.deploy.restartAfterDeploy ? "prompt-default-yes" : "prompt-default-no";
 }
+
+export function resolveShouldPrune(
+  config: SupabaseSelfhostedConfig,
+  options?: Pick<FunctionsDeployOptions, "prune">,
+): boolean | "prompt-default-yes" | "prompt-default-no" {
+  if (options?.prune === true) {
+    return true;
+  }
+
+  if (options?.prune === false) {
+    return false;
+  }
+
+  return config.deploy.pruneAfterDeploy ? "prompt-default-yes" : "prompt-default-no";
+}

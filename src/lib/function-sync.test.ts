@@ -23,4 +23,13 @@ describe("findPrunableRemoteEntries", () => {
 
     assert.deepEqual(prunable, []);
   });
+
+  it("excludes protected names even when they only exist remotely", () => {
+    const prunable = findPrunableRemoteEntries(
+      [{ name: "clients", isDirectory: true }],
+      ["main", "clients", "hello"],
+    );
+
+    assert.deepEqual(prunable, ["hello"]);
+  });
 });

@@ -7,6 +7,7 @@ import { saveConfig } from "./config.js";
 import {
   joinRemotePath,
   listLocalEntries,
+  PROTECTED_NAMES,
 } from "./function-sync.js";
 import {
   persistScopedRestartCommand,
@@ -124,6 +125,9 @@ async function pruneDirectory(
     const remotePath = joinRemotePath(remoteDir, remoteEntry.name);
 
     if (!localEntry) {
+      if (PROTECTED_NAMES.has(remoteEntry.name)) {
+        continue;
+      }
       if (remoteEntry.type === "d") {
         await sftp.rmdir(remotePath, true);
       } else {
@@ -188,7 +192,9 @@ async function collectPrunableRemotePaths(
     const remotePath = joinRemotePath(remoteDir, remoteEntry.name);
 
     if (!localEntry) {
-      collector.push(remoteEntry.name);
+      if (!PROTECTED_NAMES.has(remoteEntry.name)) {
+        collector.push(remoteEntry.name);
+      }
       continue;
     }
 

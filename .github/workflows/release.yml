@@ -18,11 +18,17 @@ jobs:
         with:
           node-version: "24"
           cache: npm
+          registry-url: "https://registry.npmjs.org"
 
       - run: npm install
 
       - name: Build release bundle
         run: ./scripts/release-bundle.sh
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

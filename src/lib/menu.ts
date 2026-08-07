@@ -7,13 +7,12 @@ import { runGenTypes } from "../commands/gen-types.js";
 import { runProjects } from "../commands/projects.js";
 import { runResetSetup, runSettings } from "../commands/settings.js";
 import { runSetup } from "../commands/setup.js";
-import { formatLinkedProfilesLabel, resolveProjectContext } from "./config.js";
+import { formatLinkedEnvironmentsLabel, resolveProjectContext } from "./config.js";
 import {
   colors,
   formatHelp,
   formatVersion,
   hideCursor,
-  paint,
   showBrandBanner,
   showCursor,
   showHelp,
@@ -29,7 +28,7 @@ type MenuItem = {
 const MENU_ITEMS: MenuItem[] = [
   {
     label: "Setup",
-    description: "Configure an environment profile",
+    description: "Configure an environment",
     run: async () => {
       await runSetup({ linkProject: true });
     },
@@ -71,7 +70,7 @@ const MENU_ITEMS: MenuItem[] = [
   },
   {
     label: "Settings",
-    description: "View or update active profile",
+    description: "View or update environment",
     run: async () => {
       await runSettings();
     },
@@ -85,14 +84,10 @@ function clearScreen(): void {
 function renderMenuContext(): string[] {
   const context = resolveProjectContext(process.cwd());
   const projectName = path.basename(context.projectRoot);
-  const envLabel = formatLinkedProfilesLabel(context);
-  const active = context.activeProfile ?? context.profile;
-  const looksProduction = /prod/i.test(active);
+  const envLabel =   formatLinkedEnvironmentsLabel(context);
 
   const projectLine = `${colors.gray}Project: ${projectName}${colors.nc}`;
-  const envLine = looksProduction
-    ? `${colors.gray}Environment: ${colors.nc}${paint(envLabel, "yellow")}`
-    : `${colors.gray}Environment: ${envLabel}${colors.nc}`;
+  const envLine = `${colors.gray}Environment: ${envLabel}${colors.nc}`;
 
   return [projectLine, envLine];
 }

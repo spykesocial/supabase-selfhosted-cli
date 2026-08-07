@@ -2,18 +2,18 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildDbUrl,
-  formatLinkedProfilesLabel,
+  formatLinkedEnvironmentsLabel,
   getAlternateDbPort,
   getDbPortsWithFallback,
   maskSecret,
   normalizeProjectLink,
-  suggestProfileName,
+  suggestEnvironmentName,
   type ProjectContext,
   type SupabaseSelfhostedConfig,
 } from "./config.js";
 
 const sampleConfig: SupabaseSelfhostedConfig = {
-  profile: "default",
+  environment: "default",
   target: "ssh",
   ssh: {
     user: "root",
@@ -88,14 +88,14 @@ describe("maskSecret", () => {
   });
 });
 
-describe("suggestProfileName", () => {
-  it("derives a safe profile name from the directory basename", () => {
+describe("suggestEnvironmentName", () => {
+  it("derives a safe environment name from the directory basename", () => {
     assert.equal(
-      suggestProfileName("/Users/dev/Documents/GitHub/supabase-keepalive"),
+      suggestEnvironmentName("/Users/dev/Documents/GitHub/supabase-keepalive"),
       "supabase-keepalive",
     );
     assert.equal(
-      suggestProfileName("/Users/dev/My Cool Project"),
+      suggestEnvironmentName("/Users/dev/My Cool Project"),
       "my-cool-project",
     );
   });
@@ -109,36 +109,31 @@ describe("loadConfig normalization", () => {
 });
 
 describe("normalizeProjectLink", () => {
-  it("upgrades a legacy single-profile link", () => {
+  it("upgrades a legacy single-environment link", () => {
     const result = normalizeProjectLink({ profile: "development" });
-    assert.equal(result?.profiles.length, 1);
-    assert.equal(result?.profiles[0], "development");
-    assert.equal(result?.activeProfile, "development");
-    assert.equal(result?.profile, "development");
+    assert.equal(result?.environments.length, 1);
+    assert.equal(result?.environments[0], "development");
     assert.ok(typeof result?.projectId === "string" && result.projectId.length > 0);
   });
 
-  it("keeps multiple profiles and an active selection", () => {
+  it("keeps multiple environments from legacy format", () => {
     const result = normalizeProjectLink({
       profiles: ["development", "production"],
       activeProfile: "production",
       projectId: "test-uuid-123",
     });
     assert.deepEqual(result, {
-      profiles: ["development", "production"],
-      activeProfile: "production",
-      profile: "production",
+      environments: ["development", "production"],
       projectId: "test-uuid-123",
     });
   });
 
-  it("falls back to the first profile when active is missing from the set", () => {
+  it("falls back to valid entries when legacy active is missing from the set", () => {
     const result = normalizeProjectLink({
       profiles: ["development", "production"],
       activeProfile: "staging",
     });
-    assert.equal(result?.activeProfile, "development");
-    assert.equal(result?.profiles.length, 2);
+    assert.equal(result?.environments.length, 2);
     assert.ok(typeof result?.projectId === "string");
   });
 
@@ -148,35 +143,33 @@ describe("normalizeProjectLink", () => {
   });
 });
 
-describe("formatLinkedProfilesLabel", () => {
+describe("formatLinkedEnvironmentsLabel", () => {
   it("describes unlinked projects", () => {
     const context: ProjectContext = {
       cwd: "/tmp/app",
       projectRoot: "/tmp/app",
-      profile: "app",
-      profiles: [],
-      activeProfile: null,
+      environment: "app",
+      environments: [],
       isLinked: false,
-      suggestedProfileName: "app",
+      suggestedEnvironmentName: "app",
       projectId: null,
     };
-    assert.match(formatLinkedProfilesLabel(context), /not linked/);
+    assert.match(formatLinkedEnvironmentsLabel(context), /not linked/);
   });
 
-  it("shows active and additional environments", () => {
+  it("shows all environments when multiple are linked", () => {
     const context: ProjectContext = {
       cwd: "/tmp/app",
       projectRoot: "/tmp/app",
-      profile: "development",
-      profiles: ["development", "production"],
-      activeProfile: "development",
+      environment: "development",
+      environments: ["development", "production"],
       isLinked: true,
-      suggestedProfileName: "app",
+      suggestedEnvironmentName: "app",
       projectId: "test-uuid",
     };
     assert.equal(
-      formatLinkedProfilesLabel(context),
-      "development  ·  also: production",
+      formatLinkedEnvironmentsLabel(context),
+      "development, production",
     );
   });
 });

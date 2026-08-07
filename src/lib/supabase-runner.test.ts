@@ -4,7 +4,7 @@ import type { SupabaseSelfhostedConfig } from "./config.js";
 import { withDbPortFallback } from "./supabase-runner.js";
 
 const sampleConfig: SupabaseSelfhostedConfig = {
-  profile: "default",
+  environment: "default",
   target: "ssh",
   ssh: {
     user: "root",

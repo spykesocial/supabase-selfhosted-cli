@@ -18,9 +18,9 @@ function configHome(): string {
   return path.join(os.homedir(), ".supabase-selfhosted-cli");
 }
 
-function tempProfile(name: string): SupabaseSelfhostedConfig {
+function tempEnvironment(name: string): SupabaseSelfhostedConfig {
   return {
-    profile: name,
+    environment: name,
     target: "ssh",
     ssh: { user: "root", host: "example.com", password: "secret" },
     functions: { localPath: "supabase/functions", remotePath: "/tmp/functions" },
@@ -44,9 +44,7 @@ function tempProfile(name: string): SupabaseSelfhostedConfig {
 
 function writeProjectLinkFile(projectRoot: string, id: string): void {
   const link = {
-    profiles: ["dev", "prod"],
-    activeProfile: "dev",
-    profile: "dev",
+    environments: ["dev", "prod"],
     projectId: id,
   };
   fs.writeFileSync(
@@ -78,9 +76,9 @@ afterEach(() => {
 });
 
 describe("resetProjectSetup", () => {
-  it("deletes all profile files, the link file, and the registry entry", () => {
-    saveConfig(tempProfile("dev"), projectId);
-    saveConfig(tempProfile("prod"), projectId);
+  it("deletes all environment files, the link file, and the registry entry", () => {
+    saveConfig(tempEnvironment("dev"), projectId);
+    saveConfig(tempEnvironment("prod"), projectId);
     writeProjectLinkFile(tempProjectDir, projectId);
 
     const profilesDir = path.join(configHome(), "profiles", projectId);
@@ -94,11 +92,11 @@ describe("resetProjectSetup", () => {
 
     const result: ResetResult = resetProjectSetup(tempProjectDir);
 
-    assert.deepEqual(result.profilesRemoved.sort(), ["dev", "prod"]);
+    assert.deepEqual(result.environmentsRemoved.sort(), ["dev", "prod"]);
     assert.equal(result.linkFileDeleted, true);
     assert.equal(result.registryEntryRemoved, true);
 
-    assert.ok(!fs.existsSync(profilesDir), "profiles directory should be deleted");
+    assert.ok(!fs.existsSync(profilesDir), "environments directory should be deleted");
     assert.ok(
       !fs.existsSync(path.join(tempProjectDir, ".supabase-selfhosted-cli.json")),
       "link file should be deleted",
@@ -117,29 +115,29 @@ describe("resetProjectSetup", () => {
   it("handles a project with no link file gracefully", () => {
     const result: ResetResult = resetProjectSetup(tempProjectDir);
 
-    assert.deepEqual(result.profilesRemoved, []);
+    assert.deepEqual(result.environmentsRemoved, []);
     assert.equal(result.linkFileDeleted, false);
     assert.equal(result.registryEntryRemoved, false);
   });
 
-  it("handles a project with a link file but no namespaced profile files", () => {
+  it("handles a project with a link file but no namespaced environment files", () => {
     writeProjectLinkFile(tempProjectDir, projectId);
 
     const result: ResetResult = resetProjectSetup(tempProjectDir);
 
-    assert.deepEqual(result.profilesRemoved, []);
+    assert.deepEqual(result.environmentsRemoved, []);
     assert.equal(result.linkFileDeleted, true);
   });
 
-  it("does not crash when the namespaced profiles directory exists but is empty", () => {
+  it("does not crash when the namespaced environments directory exists but is empty", () => {
     writeProjectLinkFile(tempProjectDir, projectId);
     const profilesDir = path.join(configHome(), "profiles", projectId);
     fs.mkdirSync(profilesDir, { recursive: true });
 
     const result: ResetResult = resetProjectSetup(tempProjectDir);
 
-    assert.deepEqual(result.profilesRemoved, []);
+    assert.deepEqual(result.environmentsRemoved, []);
     assert.equal(result.linkFileDeleted, true);
-    assert.ok(!fs.existsSync(profilesDir), "empty profiles directory should be removed");
+    assert.ok(!fs.existsSync(profilesDir), "empty environments directory should be removed");
   });
 });

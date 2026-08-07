@@ -3,7 +3,7 @@ import {
   deleteConfig,
   formatConfigSummary,
   formatProjectContextSummary,
-  listProfiles,
+  listEnvironments,
   loadConfig,
   resetProjectSetup,
   resolveProjectContext,
@@ -11,20 +11,20 @@ import {
 import { logError, logReview, logSuccess, logWarning, printSummaryBlock } from "../lib/ui.js";
 import { runSetup } from "./setup.js";
 
-export async function runSettings(options?: { profile?: string }): Promise<void> {
+export async function runSettings(options?: { environment?: string }): Promise<void> {
   const cwd = process.cwd();
-  const context = resolveProjectContext(cwd, options?.profile);
-  const profile = context.profile;
-  const config = loadConfig(profile, context.projectId);
+  const context = resolveProjectContext(cwd, options?.environment);
+  const environment = context.environment;
+  const config = loadConfig(environment, context.projectId);
 
   if (!config) {
-    if (!context.isLinked && !options?.profile) {
+    if (!context.isLinked && !options?.environment) {
       logError(
-        `This directory is not linked to a profile. Run \`supabase-selfhosted-cli projects\` to link it, or \`supabase-selfhosted-cli setup\` to create one.`,
+        `This directory is not linked to an environment. Run \`supabase-selfhosted-cli projects\` to link it, or \`supabase-selfhosted-cli setup\` to create one.`,
       );
     } else {
       logError(
-        `No profile "${profile}" found. Run \`supabase-selfhosted-cli setup\` first.`,
+        `No environment "${environment}" found. Run \`supabase-selfhosted-cli setup\` first.`,
       );
     }
     process.exitCode = 1;
@@ -32,12 +32,12 @@ export async function runSettings(options?: { profile?: string }): Promise<void>
   }
 
   const action = await select({
-    message: `Settings · ${profile}${context.profiles.length > 1 ? ` (active of ${context.profiles.length})` : ""}`,
+    message: `Settings · ${environment}${context.environments.length > 1 ? ` (${context.environments.length} environments)` : ""}`,
     choices: [
       { name: "Show current configuration", value: "show" },
       { name: "Re-run setup wizard (update credentials)", value: "setup" },
-      { name: "Manage environments (add / switch / unlink)", value: "projects" },
-      { name: "Delete stored credentials for this profile", value: "delete" },
+      { name: "Manage environments (add / unlink)", value: "projects" },
+      { name: "Delete stored credentials for this environment", value: "delete" },
       { name: "Reset setup for this project (wipe all config & unlink)", value: "reset" },
       { name: "Cancel", value: "cancel" },
     ],
@@ -58,7 +58,7 @@ export async function runSettings(options?: { profile?: string }): Promise<void>
   }
 
   if (action === "setup") {
-    await runSetup({ profile, linkProject: true, forceUpdate: true });
+    await runSetup({ environment, linkProject: true, forceUpdate: true });
     return;
   }
 
@@ -69,9 +69,9 @@ export async function runSettings(options?: { profile?: string }): Promise<void>
   }
 
   if (action === "delete") {
-    const profiles = listProfiles(context.projectId);
+    const environments = listEnvironments(context.projectId);
     const confirmed = await confirm({
-      message: `Delete profile "${profile}" and remove stored passwords?`,
+      message: `Delete environment "${environment}" and remove stored passwords?`,
       default: false,
     });
 
@@ -80,11 +80,11 @@ export async function runSettings(options?: { profile?: string }): Promise<void>
       return;
     }
 
-    deleteConfig(profile, context.projectId);
-    logSuccess(`Deleted profile "${profile}".`);
+    deleteConfig(environment, context.projectId);
+    logSuccess(`Deleted environment "${environment}".`);
 
-    if (profiles.length === 1) {
-      logReview("No profiles remain. Run `supabase-selfhosted-cli setup` to configure again.");
+    if (environments.length === 1) {
+      logReview("No environments remain. Run `supabase-selfhosted-cli setup` to configure again.");
     }
   }
 
@@ -97,15 +97,15 @@ export async function runResetSetup(): Promise<void> {
   const cwd = process.cwd();
   const context = resolveProjectContext(cwd);
 
-  if (!context.isLinked && context.profiles.length === 0) {
-    logError("This directory is not linked to any profiles. Nothing to reset.");
+  if (!context.isLinked && context.environments.length === 0) {
+    logError("This directory is not linked to any environments. Nothing to reset.");
     process.exitCode = 1;
     return;
   }
 
-  const profileCount = context.profiles.length;
-  const label = profileCount > 0
-    ? `${profileCount} profile${profileCount > 1 ? "s" : ""}`
+  const envCount = context.environments.length;
+  const label = envCount > 0
+    ? `${envCount} environment${envCount > 1 ? "s" : ""}`
     : "the project link";
 
   const confirmed = await confirm({
@@ -120,8 +120,8 @@ export async function runResetSetup(): Promise<void> {
 
   const result = resetProjectSetup(cwd);
 
-  if (result.profilesRemoved.length > 0) {
-    logSuccess(`Deleted ${result.profilesRemoved.length} profile(s): ${result.profilesRemoved.join(", ")}.`);
+  if (result.environmentsRemoved.length > 0) {
+    logSuccess(`Deleted ${result.environmentsRemoved.length} environment(s): ${result.environmentsRemoved.join(", ")}.`);
   }
 
   if (result.linkFileDeleted) {

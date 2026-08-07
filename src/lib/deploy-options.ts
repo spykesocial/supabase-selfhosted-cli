@@ -1,7 +1,7 @@
 import type { SupabaseSelfhostedConfig } from "./config.js";
 
 export type FunctionsDeployOptions = {
-  profile?: string;
+  environment?: string;
   restart?: boolean;
   prune?: boolean;
 };

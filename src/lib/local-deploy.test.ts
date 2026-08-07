@@ -11,7 +11,7 @@ const localFunctionsDir = path.join(tempRoot, "functions-src");
 const targetFunctionsDir = path.join(tempRoot, "functions-dest");
 
 const config: SupabaseSelfhostedConfig = {
-  profile: "test",
+  environment: "test",
   target: "local",
   ssh: { user: "", host: "", password: "" },
   functions: {

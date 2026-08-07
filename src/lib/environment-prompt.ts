@@ -1,10 +1,10 @@
 import { input, select } from "@inquirer/prompts";
 import { loadConfig } from "./config.js";
 
-function validateProfileName(value: string): true | string {
+function validateEnvironmentName(value: string): true | string {
   const trimmed = value.trim();
   if (!trimmed) {
-    return "Profile name is required";
+    return "Environment name is required";
   }
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(trimmed)) {
     return "Use letters, numbers, hyphens, or underscores";
@@ -20,15 +20,15 @@ function labelForEnv(
   return loadConfig(name, projectId) ? `${name} (already configured)` : name;
 }
 
-export type EnvironmentProfilePick =
-  | { kind: "profile"; name: string }
+export type EnvironmentPick =
+  | { kind: "environment"; name: string }
   | { kind: "existing" }
   | { kind: "cancel" };
 
 /**
- * Ask which environment profile to use: development, production, or a custom name.
+ * Ask which environment to use: development, production, or a custom name.
  */
-export async function promptEnvironmentProfileName(options?: {
+export async function promptEnvironmentName(options?: {
   message?: string;
   defaultName?: string;
   allowCancel?: boolean;
@@ -37,7 +37,7 @@ export async function promptEnvironmentProfileName(options?: {
   /** Prefer this when the user picks Custom name… */
   suggestedCustomName?: string;
   projectId?: string | null;
-}): Promise<EnvironmentProfilePick> {
+}): Promise<EnvironmentPick> {
   const projectId = options?.projectId;
   const envChoices = [
     { name: labelForEnv("development", projectId), value: "development" as const },
@@ -48,7 +48,7 @@ export async function promptEnvironmentProfileName(options?: {
   const choices = [
     ...envChoices,
     ...(options?.offerExisting
-      ? [{ name: "Use another existing profile…", value: "__existing__" as const }]
+      ? [{ name: "Use another existing environment…", value: "__existing__" as const }]
       : []),
     ...(options?.allowCancel
       ? [{ name: "Cancel", value: "__cancel__" as const }]
@@ -59,7 +59,7 @@ export async function promptEnvironmentProfileName(options?: {
     options?.defaultName === "production" ? "production" : "development";
 
   const picked = await select({
-    message: options?.message ?? "Which environment profile?",
+    message: options?.message ?? "Which environment?",
     choices,
     default: defaultChoice,
   });
@@ -73,7 +73,7 @@ export async function promptEnvironmentProfileName(options?: {
   }
 
   if (picked !== "__custom__") {
-    return { kind: "profile", name: picked };
+    return { kind: "environment", name: picked };
   }
 
   const customDefault =
@@ -85,10 +85,10 @@ export async function promptEnvironmentProfileName(options?: {
       : "staging");
 
   const custom = await input({
-    message: "Profile name",
+    message: "Environment name",
     default: customDefault,
-    validate: validateProfileName,
+    validate: validateEnvironmentName,
   });
 
-  return { kind: "profile", name: custom.trim() };
+  return { kind: "environment", name: custom.trim() };
 }

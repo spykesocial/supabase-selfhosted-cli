@@ -3,7 +3,7 @@ import os from "node:os";
 import { dirname, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { CONFIG_DIR, listProfiles, listRegisteredProjects } from "./config.js";
+import { CONFIG_DIR, listEnvironments, listRegisteredProjects } from "./config.js";
 
 function readPackageVersion(): string {
   try {
@@ -209,7 +209,7 @@ export function printSummaryBlock(heading: string, ...details: string[]): void {
 }
 
 export function formatVersion(): string {
-  const profiles = listProfiles();
+  const environments = listEnvironments();
   const projects = listRegisteredProjects();
 
   return [
@@ -219,7 +219,7 @@ export function formatVersion(): string {
     `Node: ${process.version}`,
     `Platform: ${process.platform} ${os.arch()}`,
     `Config: ${CONFIG_DIR}`,
-    `Profiles: ${profiles.length > 0 ? profiles.join(", ") : "(none)"}`,
+    `Environments: ${environments.length > 0 ? environments.join(", ") : "(none)"}`,
     `Linked projects: ${projects.length > 0 ? projects.map((project) => project.name).join(", ") : "(none)"}`,
     `Shell: ${process.env.SHELL ?? "unknown"}`,
     "",
@@ -237,8 +237,8 @@ type HelpEntry = {
 
 const COMMAND_ENTRIES: HelpEntry[] = [
   { command: "supabase-selfhosted-cli", description: "Main menu" },
-  { command: "setup", description: "Create or update an environment profile" },
-  { command: "projects", description: "Add, switch, or manage project environments" },
+  { command: "setup", description: "Create or update an environment" },
+  { command: "projects", description: "Add or manage project environments" },
   { command: "settings", description: "View, update, or delete stored credentials" },
   { command: "functions deploy", description: "Deploy local supabase/functions" },
   { command: "db push", description: "Push local migrations with supabase db push" },
@@ -247,10 +247,9 @@ const COMMAND_ENTRIES: HelpEntry[] = [
 
 const EXAMPLE_ENTRIES: HelpEntry[] = [
   { command: "projects --list", description: "Show projects and linked environments" },
-  { command: "projects --link", description: "Add development or production profile" },
-  { command: "projects --switch", description: "Change the active environment" },
-  { command: "setup -p production", description: "Create a production profile" },
-  { command: "db push -p production", description: "Push migrations to production once" },
+  { command: "projects --link", description: "Add development or production environment" },
+  { command: "setup -e production", description: "Create a production environment" },
+  { command: "db push -e production", description: "Push migrations to production once" },
   { command: "functions deploy --prune", description: "Deploy and remove remote-only files" },
   { command: "functions deploy --no-restart", description: "Deploy without restarting runtime" },
   { command: "gen types -o src/types/database.ts", description: "Write types to a custom path" },
@@ -274,7 +273,7 @@ export function formatHelp(): string {
     formatHelpSection("COMMANDS", COMMAND_ENTRIES),
     formatHelpSection("EXAMPLES", EXAMPLE_ENTRIES),
     paint("OPTIONS", "blue"),
-    `  ${paintBrand("-p, --profile <name>".padEnd(28))} Use a profile for this command`,
+    `  ${paintBrand("-e, --environment <name>".padEnd(28))} Use an environment for this command`,
     `  ${paintBrand("-h, --help".padEnd(28))} Show this help message`,
     `  ${paintBrand("-V, --version".padEnd(28))} Show version information`,
     "",

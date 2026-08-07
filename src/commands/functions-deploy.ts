@@ -12,12 +12,12 @@ import { deployFunctionsDirectory, listPrunableRemotePaths, restartSupabaseInsta
 import { logInfo, logWarning, logSuccess, printSummaryBlock, withSpinner } from "../lib/ui.js";
 
 export async function runFunctionsDeploy(options?: FunctionsDeployOptions): Promise<void> {
-  const config = await requireConfig(options?.profile);
+  const config = await requireConfig(options?.environment);
   if (!config) {
     return;
   }
 
-  const context = resolveProjectContext(process.cwd(), options?.profile);
+  const context = resolveProjectContext(process.cwd(), options?.environment);
   printSummaryBlock(
     "Deploying with",
     ...formatProjectContextSummary(context).split("\n"),

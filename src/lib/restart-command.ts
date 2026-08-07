@@ -88,7 +88,7 @@ export function isGeneratedRestartCommand(command: string): boolean {
 
 /**
  * Build a restart command that finds the edge-functions container which
- * mounts this profile's functions path. This is required on Dokploy where
+ * mounts this environment's functions path. This is required on Dokploy where
  * the compose directory id can differ from the Docker Compose project name
  * embedded in container names.
  */
@@ -117,7 +117,7 @@ export type ResolvedRestartCommand = {
 };
 
 /**
- * Resolve the restart command for a profile.
+ * Resolve the restart command for an environment.
  * Host-wide and previously generated name-grep commands are replaced with
  * mount-path discovery derived from functions.remotePath.
  */
@@ -159,7 +159,7 @@ export function resolveRestartCommand(
   return { command: configured, projectId, autoScoped: false };
 }
 
-/** Persist an auto-scoped restart command back into the profile. */
+/** Persist an auto-scoped restart command back into the environment config. */
 export function persistScopedRestartCommand(
   config: SupabaseSelfhostedConfig,
   command: string,

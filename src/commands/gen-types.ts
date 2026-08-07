@@ -9,17 +9,17 @@ import { generateTypeScriptTypes, withDbPortFallback } from "../lib/supabase-run
 import { printSummaryBlock } from "../lib/ui.js";
 
 export async function runGenTypes(options?: {
-  profile?: string;
+  environment?: string;
   output?: string;
   schema?: string;
   debug?: boolean;
 }): Promise<void> {
-  const config = await requireConfig(options?.profile);
+  const config = await requireConfig(options?.environment);
   if (!config) {
     return;
   }
 
-  const context = resolveProjectContext(process.cwd(), options?.profile);
+  const context = resolveProjectContext(process.cwd(), options?.environment);
   const alternatePort = getAlternateDbPort(config, "types");
   printSummaryBlock(
     "Generating types with",

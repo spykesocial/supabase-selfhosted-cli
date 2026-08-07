@@ -8,15 +8,15 @@ import { pushDatabaseMigrations, withDbPortFallback } from "../lib/supabase-runn
 import { printSummaryBlock } from "../lib/ui.js";
 
 export async function runDbPush(options?: {
-  profile?: string;
+  environment?: string;
   debug?: boolean;
 }): Promise<void> {
-  const config = await requireConfig(options?.profile);
+  const config = await requireConfig(options?.environment);
   if (!config) {
     return;
   }
 
-  const context = resolveProjectContext(process.cwd(), options?.profile);
+  const context = resolveProjectContext(process.cwd(), options?.environment);
   const alternatePort = getAlternateDbPort(config, "push");
   printSummaryBlock(
     "Pushing migrations with",

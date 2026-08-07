@@ -24,28 +24,26 @@ program
 program
   .command("setup")
   .description("Interactive setup — store SSH/local, database, and deploy settings")
-  .option("-p, --profile <name>", "Profile name (defaults to this project's folder name)")
-  .action(async (options: { profile?: string }) => {
-    await runSetup({ profile: options.profile, linkProject: true });
+  .option("-e, --environment <name>", "Environment name (defaults to this project's folder name)")
+  .action(async (options: { environment?: string }) => {
+    await runSetup({ environment: options.environment, linkProject: true });
   });
 
 program
   .command("projects")
-  .description("Add, switch, or manage project environments (e.g. development / production)")
-  .option("-p, --profile <name>", "Profile name")
+  .description("Add or manage project environments (e.g. development / production)")
+  .option("-e, --environment <name>", "Environment name")
   .option("--list", "List linked projects and environments")
-  .option("--link", "Add an environment profile to this directory")
-  .option("--switch", "Switch the active environment for this directory")
+  .option("--link", "Add an environment to this directory")
   .option("--show", "Show environment details for this directory")
-  .option("--edit", "Edit profile credentials")
+  .option("--edit", "Edit environment credentials")
   .option("--unlink", "Unlink one or all environments (keep credentials)")
-  .option("--delete", "Delete a stored profile")
+  .option("--delete", "Delete a stored environment")
   .action(
     async (options: {
-      profile?: string;
+      environment?: string;
       list?: boolean;
       link?: boolean;
-      switch?: boolean;
       show?: boolean;
       edit?: boolean;
       unlink?: boolean;
@@ -58,8 +56,8 @@ program
 program
   .command("settings")
   .description("View, update, or delete stored credentials")
-  .option("-p, --profile <name>", "Profile name")
-  .action(async (options: { profile?: string }) => {
+  .option("-e, --environment <name>", "Environment name")
+  .action(async (options: { environment?: string }) => {
     await runSettings(options);
   });
 
@@ -70,12 +68,12 @@ const functionsCommand = program
 functionsCommand
   .command("deploy")
   .description("Deploy local supabase/functions to your self-hosted instance")
-  .option("-p, --profile <name>", "Profile name")
+  .option("-e, --environment <name>", "Environment name")
   .option("--restart", "Restart Supabase after deploy")
   .option("--no-restart", "Skip restart after deploy")
   .option("--prune", "Remove destination files and folders not present locally")
   .option("--no-prune", "Skip pruning destination")
-  .action(async (options: { profile?: string; restart?: boolean; prune?: boolean }) => {
+  .action(async (options: { environment?: string; restart?: boolean; prune?: boolean }) => {
     await runFunctionsDeploy(options);
   });
 
@@ -84,9 +82,9 @@ const dbCommand = program.command("db").description("Database operations");
 dbCommand
   .command("push")
   .description("Push local migrations using supabase db push")
-  .option("-p, --profile <name>", "Profile name")
+  .option("-e, --environment <name>", "Environment name")
   .option("--debug", "Pass --debug to supabase CLI")
-  .action(async (options: { profile?: string; debug?: boolean }) => {
+  .action(async (options: { environment?: string; debug?: boolean }) => {
     await runDbPush(options);
   });
 
@@ -95,13 +93,13 @@ const genCommand = program.command("gen").description("Code generation");
 genCommand
   .command("types")
   .description("Generate TypeScript types from the remote database")
-  .option("-p, --profile <name>", "Profile name")
+  .option("-e, --environment <name>", "Environment name")
   .option("-o, --output <file>", "Output file", "database.types.ts")
   .option("--schema <name>", "Postgres schema", "public")
   .option("--debug", "Pass --debug to supabase CLI")
   .action(
     async (options: {
-      profile?: string;
+      environment?: string;
       output?: string;
       schema?: string;
       debug?: boolean;

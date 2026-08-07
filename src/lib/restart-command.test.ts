@@ -14,7 +14,7 @@ function baseConfig(
   overrides: Partial<SupabaseSelfhostedConfig> = {},
 ): SupabaseSelfhostedConfig {
   return {
-    profile: "financial-wisdom-clientele",
+    environment: "financial-wisdom-clientele",
     target: "ssh",
     ssh: { user: "root", host: "1.2.3.4", password: "secret" },
     functions: {

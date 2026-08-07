@@ -5,13 +5,13 @@ import path from "node:path";
 import { findSupabaseProjectRoot } from "./paths.js";
 
 export const CONFIG_DIR = path.join(os.homedir(), ".supabase-selfhosted-cli");
-export const DEFAULT_PROFILE = "default";
+export const DEFAULT_ENVIRONMENT = "default";
 export const PROJECT_LINK_FILENAME = ".supabase-selfhosted-cli.json";
 
 export type DeployTarget = "ssh" | "local";
 
 export type SupabaseSelfhostedConfig = {
-  profile: string;
+  environment: string;
   target: DeployTarget;
   ssh: {
     user: string;
@@ -39,17 +39,18 @@ export type SupabaseSelfhostedConfig = {
   updatedAt: string;
 };
 
-/** On-disk project link. Legacy files may only have `profile`. */
+/** On-disk project link. Reads legacy `profile` / `profiles` / `activeProfile` keys. */
 export type ProjectLink = {
-  profiles: string[];
-  activeProfile: string;
-  /** @deprecated Prefer `activeProfile`; kept for backward-compatible writes. */
-  profile: string;
+  environments: string[];
   projectId: string;
 };
 
 export type ProjectLinkRaw = {
+  /** New format key */
+  environments?: string[];
+  /** Legacy single-profile key */
   profile?: string;
+  /** Legacy multi-profile keys */
   profiles?: string[];
   activeProfile?: string;
   projectId?: string;
@@ -57,10 +58,7 @@ export type ProjectLinkRaw = {
 
 export type ProjectEntry = {
   path: string;
-  /** Active profile (legacy field retained for display/compat). */
-  profile: string;
-  profiles: string[];
-  activeProfile: string;
+  environments: string[];
   name: string;
   linkedAt: string;
   projectId: string | null;
@@ -73,20 +71,19 @@ export type ProjectRegistry = {
 export type ProjectContext = {
   cwd: string;
   projectRoot: string;
-  /** Profile used for this resolution (explicit override or active). */
-  profile: string;
-  profiles: string[];
-  activeProfile: string | null;
+  /** Resolved environment for this context. */
+  environment: string;
+  environments: string[];
   isLinked: boolean;
-  suggestedProfileName: string;
+  suggestedEnvironmentName: string;
   projectId: string | null;
 };
 
-function profilePath(profile: string, projectId?: string | null): string {
+function environmentPath(environment: string, projectId?: string | null): string {
   if (projectId) {
-    return path.join(CONFIG_DIR, "profiles", projectId, `${profile}.json`);
+    return path.join(CONFIG_DIR, "profiles", projectId, `${environment}.json`);
   }
-  return path.join(CONFIG_DIR, "profiles", `${profile}.json`);
+  return path.join(CONFIG_DIR, "profiles", `${environment}.json`);
 }
 
 function projectLinkPath(dir: string): string {
@@ -105,25 +102,25 @@ export function generateProjectId(): string {
   return crypto.randomUUID();
 }
 
-/** Returns the set of project paths that reference this profile. */
-export function findProfileProjects(profile: string): string[] {
+/** Returns the set of project paths that reference this environment. */
+export function findEnvironmentProjects(environment: string): string[] {
   const registry = loadProjectRegistry();
   return registry.projects
     .filter((entry) => {
       const normalized = normalizeProjectEntry(entry);
-      return normalized.profiles.includes(profile);
+      return normalized.environments.includes(environment);
     })
     .map((entry) => entry.path);
 }
 
-export function suggestProfileName(dir: string): string {
+export function suggestEnvironmentName(dir: string): string {
   const base = path.basename(normalizeProjectPath(dir));
   const sanitized = base
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-  return sanitized || DEFAULT_PROFILE;
+  return sanitized || DEFAULT_ENVIRONMENT;
 }
 
 export function resolveProjectRoot(cwd: string): string {
@@ -138,12 +135,12 @@ export function ensureConfigDir(projectId?: string | null): void {
 }
 
 export function saveConfig(config: SupabaseSelfhostedConfig, projectId?: string | null): void {
-  const filePath = profilePath(config.profile, projectId);
+  const filePath = environmentPath(config.environment, projectId);
   ensureConfigDir(projectId);
   fs.writeFileSync(filePath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
   // Migrate: if saving to a namespaced path, remove the bare legacy file if it exists
   if (projectId) {
-    const barePath = profilePath(config.profile);
+    const barePath = environmentPath(config.environment);
     if (barePath !== filePath && fs.existsSync(barePath)) {
       fs.unlinkSync(barePath);
     }
@@ -161,17 +158,17 @@ function normalizeConfig(raw: SupabaseSelfhostedConfig): SupabaseSelfhostedConfi
   };
 }
 
-export function loadConfig(profile = DEFAULT_PROFILE, projectId?: string | null): SupabaseSelfhostedConfig | null {
+export function loadConfig(environment = DEFAULT_ENVIRONMENT, projectId?: string | null): SupabaseSelfhostedConfig | null {
   // Try namespaced path first, then bare path (backward compat)
   if (projectId) {
-    const namespacedPath = profilePath(profile, projectId);
+    const namespacedPath = environmentPath(environment, projectId);
     if (fs.existsSync(namespacedPath)) {
       const raw = JSON.parse(fs.readFileSync(namespacedPath, "utf8")) as SupabaseSelfhostedConfig;
       return normalizeConfig(raw);
     }
   }
 
-  const filePath = profilePath(profile);
+  const filePath = environmentPath(environment);
   if (!fs.existsSync(filePath)) {
     return null;
   }
@@ -180,15 +177,15 @@ export function loadConfig(profile = DEFAULT_PROFILE, projectId?: string | null)
   return normalizeConfig(raw);
 }
 
-export function deleteConfig(profile = DEFAULT_PROFILE, projectId?: string | null): boolean {
-  const filePath = profilePath(profile, projectId);
+export function deleteConfig(environment = DEFAULT_ENVIRONMENT, projectId?: string | null): boolean {
+  const filePath = environmentPath(environment, projectId);
   if (!fs.existsSync(filePath)) {
     if (projectId) {
       // Also try bare path for backward compat
-      const barePath = profilePath(profile);
+      const barePath = environmentPath(environment);
       if (fs.existsSync(barePath)) {
         fs.unlinkSync(barePath);
-        detachProfileFromProjects(profile);
+        detachEnvironmentFromProjects(environment);
         return true;
       }
     }
@@ -196,18 +193,18 @@ export function deleteConfig(profile = DEFAULT_PROFILE, projectId?: string | nul
   }
 
   fs.unlinkSync(filePath);
-  detachProfileFromProjects(profile);
+  detachEnvironmentFromProjects(environment);
   return true;
 }
 
-export function listProfiles(projectId?: string | null): string[] {
+export function listEnvironments(projectId?: string | null): string[] {
   if (projectId) {
-    const projectProfilesDir = path.join(CONFIG_DIR, "profiles", projectId);
-    if (!fs.existsSync(projectProfilesDir)) {
+    const projectEnvironmentsDir = path.join(CONFIG_DIR, "profiles", projectId);
+    if (!fs.existsSync(projectEnvironmentsDir)) {
       return [];
     }
     return fs
-      .readdirSync(projectProfilesDir)
+      .readdirSync(projectEnvironmentsDir)
       .filter((name) => name.endsWith(".json"))
       .map((name) => name.replace(/\.json$/, ""));
   }
@@ -217,7 +214,7 @@ export function listProfiles(projectId?: string | null): string[] {
     return [];
   }
 
-  const profiles: string[] = [];
+  const environments: string[] = [];
   const seen = new Set<string>();
 
   for (const entry of fs.readdirSync(profilesDir)) {
@@ -226,7 +223,7 @@ export function listProfiles(projectId?: string | null): string[] {
       const name = entry.replace(/\.json$/, "");
       if (!seen.has(name)) {
         seen.add(name);
-        profiles.push(name);
+        environments.push(name);
       }
     } else if (fs.statSync(fullPath).isDirectory()) {
       const subDir = path.join(profilesDir, entry);
@@ -235,14 +232,14 @@ export function listProfiles(projectId?: string | null): string[] {
           const name = subEntry.replace(/\.json$/, "");
           if (!seen.has(name)) {
             seen.add(name);
-            profiles.push(name);
+            environments.push(name);
           }
         }
       }
     }
   }
 
-  return profiles;
+  return environments;
 }
 
 export function normalizeProjectLink(raw: ProjectLinkRaw | null | undefined): ProjectLink | null {
@@ -250,24 +247,33 @@ export function normalizeProjectLink(raw: ProjectLinkRaw | null | undefined): Pr
     return null;
   }
 
+  // Prefer new environments key, fall back to legacy profiles/profile keys
+  const fromEnvironments = Array.isArray(raw.environments)
+    ? raw.environments.filter((name): name is string => typeof name === "string" && name.trim().length > 0)
+    : [];
   const fromList = Array.isArray(raw.profiles)
     ? raw.profiles.filter((name): name is string => typeof name === "string" && name.trim().length > 0)
     : [];
   const legacy = typeof raw.profile === "string" && raw.profile.trim() ? raw.profile.trim() : null;
-  const activeCandidate =
+  const legacyActive =
     typeof raw.activeProfile === "string" && raw.activeProfile.trim()
       ? raw.activeProfile.trim()
       : legacy;
 
-  const profiles = [...new Set(fromList.length > 0 ? fromList : legacy ? [legacy] : [])];
-  if (profiles.length === 0) {
+  const environments = [...new Set(
+    fromEnvironments.length > 0
+      ? fromEnvironments
+      : fromList.length > 0
+        ? fromList
+        : legacy
+          ? [legacy]
+          : legacyActive
+            ? [legacyActive]
+            : [],
+  )];
+  if (environments.length === 0) {
     return null;
   }
-
-  const activeProfile =
-    activeCandidate && profiles.includes(activeCandidate)
-      ? activeCandidate
-      : profiles[0];
 
   const projectId =
     typeof raw.projectId === "string" && raw.projectId.trim()
@@ -275,9 +281,7 @@ export function normalizeProjectLink(raw: ProjectLinkRaw | null | undefined): Pr
       : generateProjectId();
 
   return {
-    profiles,
-    activeProfile,
-    profile: activeProfile,
+    environments,
     projectId,
   };
 }
@@ -302,9 +306,7 @@ function writeProjectLinkFile(projectRoot: string, link: ProjectLink): void {
     projectLinkPath(projectRoot),
     `${JSON.stringify(
       {
-        profiles: normalized.profiles,
-        activeProfile: normalized.activeProfile,
-        profile: normalized.activeProfile,
+        environments: normalized.environments,
         projectId: normalized.projectId,
       },
       null,
@@ -313,9 +315,10 @@ function writeProjectLinkFile(projectRoot: string, link: ProjectLink): void {
   );
 }
 
-/** Returns the active profile name for a project, or null if unlinked. */
+/** Returns the first environment name for a project, or null if unlinked. */
 export function loadProjectLink(cwd: string): string | null {
-  return loadProjectLinkData(cwd)?.activeProfile ?? null;
+  const link = loadProjectLinkData(cwd);
+  return link?.environments[0] ?? null;
 }
 
 /** Returns the full normalized project link, walking up from cwd. */
@@ -354,28 +357,27 @@ export function findProjectLinkRoot(cwd: string): string | null {
   }
 }
 
-export function resolveProfile(cwd: string, explicitProfile?: string): string {
-  return resolveProjectContext(cwd, explicitProfile).profile;
+export function resolveEnvironment(cwd: string, explicitEnvironment?: string): string {
+  return resolveProjectContext(cwd, explicitEnvironment).environment;
 }
 
 export function resolveProjectContext(
   cwd: string,
-  explicitProfile?: string,
+  explicitEnvironment?: string,
 ): ProjectContext {
   const normalizedCwd = normalizeProjectPath(cwd);
   const projectRoot = resolveProjectRoot(normalizedCwd);
-  const suggestedProfileName = suggestProfileName(projectRoot);
+  const suggestedEnvironmentName = suggestEnvironmentName(projectRoot);
   const link = loadProjectLinkData(normalizedCwd);
 
-  if (explicitProfile) {
+  if (explicitEnvironment) {
     return {
       cwd: normalizedCwd,
       projectRoot,
-      profile: explicitProfile,
-      profiles: link?.profiles ?? [],
-      activeProfile: link?.activeProfile ?? null,
-      isLinked: Boolean(link?.profiles.includes(explicitProfile)),
-      suggestedProfileName,
+      environment: explicitEnvironment,
+      environments: link?.environments ?? [],
+      isLinked: Boolean(link?.environments.includes(explicitEnvironment)),
+      suggestedEnvironmentName,
       projectId: link?.projectId ?? null,
     };
   }
@@ -385,11 +387,10 @@ export function resolveProjectContext(
     return {
       cwd: normalizedCwd,
       projectRoot,
-      profile: link.activeProfile,
-      profiles: link.profiles,
-      activeProfile: link.activeProfile,
+      environment: link.environments[0],
+      environments: link.environments,
       isLinked: true,
-      suggestedProfileName,
+      suggestedEnvironmentName,
       projectId: link.projectId,
     };
   }
@@ -397,11 +398,10 @@ export function resolveProjectContext(
   return {
     cwd: normalizedCwd,
     projectRoot,
-    profile: suggestedProfileName,
-    profiles: [],
-    activeProfile: null,
+    environment: suggestedEnvironmentName,
+    environments: [],
     isLinked: false,
-    suggestedProfileName,
+    suggestedEnvironmentName,
     projectId: null,
   };
 }
@@ -434,8 +434,7 @@ function ensureProjectRegistered(projectRoot: string, link: ProjectLink): void {
   const existing = registry.projects.find((project) => project.path === normalizedPath);
   if (
     existing &&
-    existing.activeProfile === link.activeProfile &&
-    sameProfileSet(existing.profiles ?? [existing.profile], link.profiles)
+    sameEnvironmentSet(existing.environments ?? [], link.environments)
   ) {
     return;
   }
@@ -443,7 +442,7 @@ function ensureProjectRegistered(projectRoot: string, link: ProjectLink): void {
   registerProject(normalizedPath, link, existing?.name);
 }
 
-function sameProfileSet(left: string[], right: string[]): boolean {
+function sameEnvironmentSet(left: string[], right: string[]): boolean {
   if (left.length !== right.length) {
     return false;
   }
@@ -454,45 +453,47 @@ function sameProfileSet(left: string[], right: string[]): boolean {
 }
 
 function normalizeProjectEntry(entry: ProjectEntry): ProjectEntry {
+  const legacyProfile = (entry as Record<string, unknown>).profile as string | undefined;
+  const legacyActiveProfile = (entry as Record<string, unknown>).activeProfile as string | undefined
+    ?? (entry as Record<string, unknown>).profile as string | undefined;
+  const legacyProfiles = (entry as Record<string, unknown>).profiles as string[] | undefined;
+
   const link = normalizeProjectLink({
-    profile: entry.profile,
-    profiles: entry.profiles,
-    activeProfile: entry.activeProfile ?? entry.profile,
+    environments: entry.environments,
+    profiles: entry.environments?.length ? entry.environments : legacyProfiles,
+    profile: legacyProfile ?? legacyActiveProfile,
+    activeProfile: legacyActiveProfile,
   });
 
   if (!link) {
     return {
       ...entry,
-      profiles: entry.profile ? [entry.profile] : [],
-      activeProfile: entry.profile,
-      profile: entry.profile,
+      environments: [],
       projectId: entry.projectId ?? null,
     };
   }
 
   return {
     ...entry,
-    profiles: link.profiles,
-    activeProfile: link.activeProfile,
-    profile: link.activeProfile,
+    environments: link.environments,
     projectId: link.projectId,
   };
 }
 
 export function registerProject(
   cwd: string,
-  linkOrProfile: ProjectLink | string,
+  linkOrEnvironment: ProjectLink | string,
   name?: string,
 ): ProjectEntry {
   const projectRoot = resolveProjectRoot(cwd);
   const normalizedPath = normalizeProjectPath(projectRoot);
   const link =
-    typeof linkOrProfile === "string"
-      ? normalizeProjectLink({ profile: linkOrProfile })
-      : normalizeProjectLink(linkOrProfile);
+    typeof linkOrEnvironment === "string"
+      ? normalizeProjectLink({ profile: linkOrEnvironment })
+      : normalizeProjectLink(linkOrEnvironment);
 
   if (!link) {
-    throw new Error("Cannot register a project without at least one profile");
+    throw new Error("Cannot register a project without at least one environment");
   }
 
   const registry = loadProjectRegistry();
@@ -503,9 +504,7 @@ export function registerProject(
 
   const entry: ProjectEntry = {
     path: normalizedPath,
-    profile: link.activeProfile,
-    profiles: link.profiles,
-    activeProfile: link.activeProfile,
+    environments: link.environments,
     name: name ?? existing?.name ?? path.basename(normalizedPath),
     linkedAt: existing?.linkedAt ?? new Date().toISOString(),
     projectId: link.projectId,
@@ -538,33 +537,25 @@ export function unregisterProject(cwd: string): boolean {
 }
 
 /**
- * Add a profile to the project's linked set and make it active.
- * Existing linked profiles are preserved.
+ * Add an environment to the project's linked set.
+ * Existing linked environments are preserved.
  */
-export function saveProjectLink(cwd: string, profile: string, name?: string): ProjectLink {
-  return addProjectProfile(cwd, profile, { makeActive: true, name });
+export function saveProjectLink(cwd: string, environment: string, name?: string): ProjectLink {
+  return addProjectEnvironment(cwd, environment, { name });
 }
 
-export function addProjectProfile(
+export function addProjectEnvironment(
   cwd: string,
-  profile: string,
-  options?: { makeActive?: boolean; name?: string },
+  environment: string,
+  options?: { name?: string },
 ): ProjectLink {
   const projectRoot = resolveProjectRoot(cwd);
   const existing = readProjectLinkAt(projectRoot);
-  const profiles = [...new Set([...(existing?.profiles ?? []), profile])];
-  const makeActive = options?.makeActive ?? !existing;
-  const activeProfile = makeActive
-    ? profile
-    : (existing?.activeProfile && profiles.includes(existing.activeProfile)
-        ? existing.activeProfile
-        : profile);
+  const environments = [...new Set([...(existing?.environments ?? []), environment])];
   const projectId = existing?.projectId ?? generateProjectId();
 
   const link: ProjectLink = {
-    profiles,
-    activeProfile,
-    profile: activeProfile,
+    environments,
     projectId,
   };
 
@@ -580,34 +571,11 @@ export function getProjectId(cwd: string): string | null {
   return link?.projectId ?? null;
 }
 
-export function setActiveProjectProfile(cwd: string, profile: string): ProjectLink {
-  const projectRoot = resolveProjectRoot(cwd);
-  const existing = readProjectLinkAt(projectRoot);
-  if (!existing) {
-    return addProjectProfile(cwd, profile, { makeActive: true });
-  }
-
-  if (!existing.profiles.includes(profile)) {
-    return addProjectProfile(cwd, profile, { makeActive: true });
-  }
-
-  const link: ProjectLink = {
-    profiles: existing.profiles,
-    activeProfile: profile,
-    profile,
-    projectId: existing.projectId,
-  };
-
-  writeProjectLinkFile(projectRoot, link);
-  registerProject(projectRoot, link);
-  return link;
-}
-
 /**
- * Remove one profile from the project link.
+ * Remove one environment from the project link.
  * Returns the updated link, or null if the project became fully unlinked.
  */
-export function removeProjectProfile(cwd: string, profile: string): ProjectLink | null {
+export function removeProjectEnvironment(cwd: string, environment: string): ProjectLink | null {
   const linkRoot = findProjectLinkRoot(cwd);
   if (!linkRoot) {
     return null;
@@ -618,18 +586,14 @@ export function removeProjectProfile(cwd: string, profile: string): ProjectLink 
     return null;
   }
 
-  const profiles = existing.profiles.filter((name) => name !== profile);
-  if (profiles.length === 0) {
+  const environments = existing.environments.filter((name) => name !== environment);
+  if (environments.length === 0) {
     removeProjectLink(linkRoot);
     return null;
   }
 
-  const activeProfile =
-    existing.activeProfile === profile ? profiles[0] : existing.activeProfile;
   const link: ProjectLink = {
-    profiles,
-    activeProfile,
-    profile: activeProfile,
+    environments,
     projectId: existing.projectId,
   };
 
@@ -650,20 +614,20 @@ export function removeProjectLink(cwd: string): boolean {
 }
 
 export type ResetResult = {
-  profilesRemoved: string[];
+  environmentsRemoved: string[];
   linkFileDeleted: boolean;
   registryEntryRemoved: boolean;
 };
 
 /**
  * Fully reset setup for the current project:
- *   - Deletes all profile config files in the namespaced directory
+ *   - Deletes all environment config files in the namespaced directory
  *   - Deletes the .supabase-selfhosted-cli.json link file
  *   - Removes the project from the registry
  */
 export function resetProjectSetup(cwd: string): ResetResult {
   const result: ResetResult = {
-    profilesRemoved: [],
+    environmentsRemoved: [],
     linkFileDeleted: false,
     registryEntryRemoved: false,
   };
@@ -676,10 +640,10 @@ export function resetProjectSetup(cwd: string): ResetResult {
     if (fs.existsSync(profilesDir)) {
       for (const entry of fs.readdirSync(profilesDir)) {
         if (entry.endsWith(".json")) {
-          const profile = entry.replace(/\.json$/, "");
+          const environment = entry.replace(/\.json$/, "");
           const filePath = path.join(profilesDir, entry);
           fs.unlinkSync(filePath);
-          result.profilesRemoved.push(profile);
+          result.environmentsRemoved.push(environment);
         }
       }
       const remaining = fs.existsSync(profilesDir)
@@ -697,40 +661,34 @@ export function resetProjectSetup(cwd: string): ResetResult {
   return result;
 }
 
-/** Drop a deleted profile from every project link / registry entry. */
-export function detachProfileFromProjects(profile: string): void {
+/** Drop a deleted environment from every project link / registry entry. */
+export function detachEnvironmentFromProjects(environment: string): void {
   const registry = loadProjectRegistry();
   const nextProjects: ProjectEntry[] = [];
 
   for (const entry of registry.projects) {
     const normalized = normalizeProjectEntry(entry);
-    if (!normalized.profiles.includes(profile)) {
+    if (!normalized.environments.includes(environment)) {
       nextProjects.push(normalized);
       continue;
     }
 
-    const nextProfiles = normalized.profiles.filter((name) => name !== profile);
-    if (nextProfiles.length === 0) {
+    const nextEnvironments = normalized.environments.filter((name) => name !== environment);
+    if (nextEnvironments.length === 0) {
       if (fs.existsSync(projectLinkPath(normalized.path))) {
         fs.unlinkSync(projectLinkPath(normalized.path));
       }
       continue;
     }
 
-    const activeProfile =
-      normalized.activeProfile === profile ? nextProfiles[0] : normalized.activeProfile;
     const link: ProjectLink = {
-      profiles: nextProfiles,
-      activeProfile,
-      profile: activeProfile,
+      environments: nextEnvironments,
       projectId: generateProjectId(),
     };
     writeProjectLinkFile(normalized.path, link);
     nextProjects.push({
       ...normalized,
-      profiles: nextProfiles,
-      activeProfile,
-      profile: activeProfile,
+      environments: nextEnvironments,
       projectId: normalized.projectId,
     });
   }
@@ -745,42 +703,35 @@ export function formatProjectContextSummary(context: ProjectContext): string {
     `Directory: ${context.projectRoot}`,
   ];
 
-  if (context.isLinked || context.profiles.length > 0) {
-    const linked = context.profiles.length > 0 ? context.profiles : [context.profile];
-    const active = context.activeProfile ?? context.profile;
-    if (active !== context.profile) {
-      lines.push(`Using profile: ${context.profile} (active default: ${active})`);
-    } else {
-      lines.push(`Active profile: ${active}`);
-    }
+  if (context.isLinked || context.environments.length > 0) {
+    const linked = context.environments.length > 0 ? context.environments : [context.environment];
+    lines.push(`Environment: ${context.environment}`);
     lines.push(
       linked.length === 1
-        ? `Linked profiles: ${linked[0]}`
-        : `Linked profiles: ${linked.join(", ")}`,
+        ? `Linked environments: ${linked[0]}`
+        : `Linked environments: ${linked.join(", ")}`,
     );
   } else {
-    lines.push(`Active profile: (not linked — suggested: ${context.suggestedProfileName})`);
-    lines.push("Linked profiles: (none)");
+    lines.push(`Environment: (not linked — suggested: ${context.suggestedEnvironmentName})`);
+    lines.push("Linked environments: (none)");
   }
 
   return lines.join("\n");
 }
 
-export function formatLinkedProfilesLabel(context: ProjectContext): string {
-  if (!context.isLinked && context.profiles.length === 0) {
+export function formatLinkedEnvironmentsLabel(context: ProjectContext): string {
+  if (!context.isLinked && context.environments.length === 0) {
     return "(not linked — run Setup or Projects)";
   }
 
-  const active = context.activeProfile ?? context.profile;
-  if (context.profiles.length <= 1) {
-    return active;
+  if (context.environments.length <= 1) {
+    return context.environments[0];
   }
 
-  const others = context.profiles.filter((name) => name !== active);
-  return `${active}  ·  also: ${others.join(", ")}`;
+  return context.environments.join(", ");
 }
 
-export function formatProfileTargetSummary(
+export function formatEnvironmentTargetSummary(
   config: SupabaseSelfhostedConfig,
 ): string {
   if (config.target === "local") {
@@ -825,8 +776,6 @@ export function buildDbUrl(
   const { tenantId, password, host, database } = config.database;
   const port = options?.port ?? getPrimaryDbPort(config, kind);
   const encodedPassword = encodeURIComponent(password);
-  // Self-hosted Supavisor usually has no TLS. Recent supabase CLI versions
-  // require TLS for remote hosts unless sslmode=disable / PGSSLMODE=disable.
   return `postgresql://postgres.${tenantId}:${encodedPassword}@${host}:${port}/${database}?sslmode=disable`;
 }
 
@@ -841,7 +790,7 @@ export function maskSecret(value: string): string {
 export function formatConfigSummary(config: SupabaseSelfhostedConfig): string {
   const targetLabel = config.target === "local" ? "Local (Docker / filesystem)" : "Remote (SSH)";
   const lines = [
-    `Profile: ${config.profile}`,
+    `Environment: ${config.environment}`,
     `Target: ${targetLabel}`,
   ];
 

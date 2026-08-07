@@ -15,8 +15,8 @@ import {
   type DeployTarget,
   type SupabaseSelfhostedConfig,
 } from "../lib/config.js";
+import { promptEnvironmentName } from "../lib/environment-prompt.js";
 import { findSupabaseProjectRoot } from "../lib/paths.js";
-import { promptEnvironmentProfileName } from "../lib/profile-prompt.js";
 import {
   buildProjectScopedRestartCommand,
   isUnsafeGlobalRestartCommand,
@@ -59,39 +59,39 @@ function defaultRestartCommand(functionsPath: string): string {
 }
 
 export async function runSetup(options?: {
-  profile?: string;
+  environment?: string;
   linkProject?: boolean;
   forceUpdate?: boolean;
 }): Promise<SupabaseSelfhostedConfig | null> {
   const cwd = process.cwd();
-  const context = resolveProjectContext(cwd, options?.profile);
+  const context = resolveProjectContext(cwd, options?.environment);
 
-  let profile = options?.profile;
-  if (!profile) {
+  let environment = options?.environment;
+  if (!environment) {
     console.log(showBrandBanner());
-    const picked = await promptEnvironmentProfileName({
-      message: "Which environment profile are you setting up?",
+    const picked = await promptEnvironmentName({
+      message: "Which environment are you setting up?",
       defaultName: context.isLinked
-        ? (context.activeProfile ?? "development")
+        ? "development"
         : "development",
       allowCancel: true,
-      suggestedCustomName: context.suggestedProfileName,
+      suggestedCustomName: context.suggestedEnvironmentName,
       projectId: context.projectId,
     });
     if (picked.kind === "cancel" || picked.kind === "existing") {
       logWarning("Setup cancelled.");
       return null;
     }
-    profile = picked.name;
+    environment = picked.name;
   }
 
   const existing = context.projectId
-    ? loadConfig(profile, context.projectId)
+    ? loadConfig(environment, context.projectId)
     : null;
 
   if (existing && !options?.forceUpdate) {
     const overwrite = await confirm({
-      message: `Profile "${profile}" already exists. Overwrite it?`,
+      message: `Environment "${environment}" already exists. Overwrite it?`,
       default: false,
     });
 
@@ -101,10 +101,10 @@ export async function runSetup(options?: {
     }
   }
 
-  if (options?.profile) {
+  if (options?.environment) {
     console.log(showBrandBanner());
   }
-  logInfo(`Setting up profile "${profile}" for ${path.basename(context.projectRoot)}`);
+  logInfo(`Setting up environment "${environment}" for ${path.basename(context.projectRoot)}`);
   logInfo("These settings are stored locally in ~/.supabase-selfhosted-cli/");
   console.log("");
 
@@ -258,12 +258,12 @@ export async function runSetup(options?: {
     }
   }
 
-  const alreadyLinked = context.profiles.includes(profile);
+  const alreadyLinked = context.environments.includes(environment);
   const linkMessage = alreadyLinked
-    ? `Keep "${profile}" linked to this project and set it as active?`
+    ? `Keep "${environment}" linked to this project?`
     : context.isLinked
-      ? `Add "${profile}" to this project's environments and make it active?`
-      : `Link this project to profile "${profile}" (.supabase-selfhosted-cli.json)?`;
+      ? `Add "${environment}" to this project's environments?`
+      : `Link this project to environment "${environment}" (.supabase-selfhosted-cli.json)?`;
 
   const linkProject =
     options?.linkProject ??
@@ -274,7 +274,7 @@ export async function runSetup(options?: {
 
   const now = new Date().toISOString();
   const config: SupabaseSelfhostedConfig = {
-    profile,
+    environment,
     target,
     ssh: {
       user: sshUser.trim(),
@@ -303,14 +303,14 @@ export async function runSetup(options?: {
   };
 
   if (linkProject) {
-    const link = saveProjectLink(cwd, profile, path.basename(context.projectRoot));
+    const link = saveProjectLink(cwd, environment, path.basename(context.projectRoot));
     saveConfig(config, link.projectId);
     const next = resolveProjectContext(cwd);
-    const linkedLabel = next.profiles.join(", ");
+    const linkedLabel = next.environments.join(", ");
     logSuccess(
-      next.profiles.length > 1
-        ? `Active profile "${profile}". Linked environments: ${linkedLabel}.`
-        : `Linked ${context.projectRoot} to profile "${profile}".`,
+      next.environments.length > 1
+        ? `Environment "${environment}" configured. Linked environments: ${linkedLabel}.`
+        : `Linked ${context.projectRoot} to environment "${environment}".`,
     );
   } else {
     saveConfig(config, context.projectId);

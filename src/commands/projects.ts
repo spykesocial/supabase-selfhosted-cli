@@ -1,22 +1,21 @@
 import path from "node:path";
 import { confirm, select } from "@inquirer/prompts";
 import {
-  addProjectProfile,
+  addProjectEnvironment,
   deleteConfig,
   formatConfigSummary,
-  formatLinkedProfilesLabel,
-  formatProfileTargetSummary,
+  formatEnvironmentTargetSummary,
+  formatLinkedEnvironmentsLabel,
   formatProjectContextSummary,
-  listProfiles,
+  listEnvironments,
   listRegisteredProjects,
   loadConfig,
+  removeProjectEnvironment,
   removeProjectLink,
-  removeProjectProfile,
   resolveProjectContext,
-  setActiveProjectProfile,
   type ProjectEntry,
 } from "../lib/config.js";
-import { promptEnvironmentProfileName } from "../lib/profile-prompt.js";
+import { promptEnvironmentName } from "../lib/environment-prompt.js";
 import {
   logError,
   logInfo,
@@ -29,27 +28,26 @@ import {
 import { runSetup } from "./setup.js";
 
 function formatProjectRow(entry: ProjectEntry): string {
-  const profiles = entry.profiles?.length ? entry.profiles : [entry.profile];
-  const active = entry.activeProfile ?? entry.profile;
-  const config = loadConfig(active, entry.projectId);
-  const target = config ? formatProfileTargetSummary(config) : "(profile missing)";
+  const environments = entry.environments?.length ? entry.environments : [];
+  const firstEnv = environments[0];
+  const config = loadConfig(firstEnv, entry.projectId);
+  const target = config ? formatEnvironmentTargetSummary(config) : "(environment missing)";
   const envLabel =
-    profiles.length === 1
-      ? active
-      : `${active} (active) · ${profiles.filter((name) => name !== active).join(", ")}`;
+    environments.length === 1
+      ? firstEnv
+      : environments.join(", ");
   return `${entry.name} → ${envLabel} · ${target}`;
 }
 
-function profileChoiceLabel(name: string, active?: string | null, projectId?: string | null): string {
+function environmentChoiceLabel(name: string, projectId?: string | null): string {
   const config = loadConfig(name, projectId);
-  const target = config ? formatProfileTargetSummary(config) : "missing credentials";
-  const marker = name === active ? " ★ active" : "";
-  return `${name}${marker}  ·  ${target}`;
+  const target = config ? formatEnvironmentTargetSummary(config) : "missing credentials";
+  return `${name}  ·  ${target}`;
 }
 
 function printProjectsList(): void {
   const registered = listRegisteredProjects();
-  const profiles = listProfiles();
+  const environments = listEnvironments();
   const cwd = process.cwd();
   const context = resolveProjectContext(cwd);
 
@@ -69,61 +67,41 @@ function printProjectsList(): void {
   }
 
   const linkedNames = new Set(
-    registered.flatMap((entry) =>
-      entry.profiles?.length ? entry.profiles : [entry.profile],
-    ),
+    registered.flatMap((entry) => entry.environments),
   );
-  const orphanProfiles = profiles.filter((profile) => !linkedNames.has(profile));
+  const orphanEnvironments = environments.filter((environment) => !linkedNames.has(environment));
 
-  if (orphanProfiles.length > 0) {
-    console.log(paint("Profiles not linked to any project", "blue"));
-    for (const profile of orphanProfiles) {
-      const config = loadConfig(profile);
-      const target = config ? formatProfileTargetSummary(config) : "(missing config)";
-      console.log(`  • ${profile} (${target})`);
+  if (orphanEnvironments.length > 0) {
+    console.log(paint("Environments not linked to any project", "blue"));
+    for (const environment of orphanEnvironments) {
+      const config = loadConfig(environment);
+      const target = config ? formatEnvironmentTargetSummary(config) : "(missing config)";
+      console.log(`  • ${environment} (${target})`);
     }
     console.log("");
   }
 }
 
-async function linkOrSetupProfile(
+async function linkOrSetupEnvironment(
   cwd: string,
-  profileName: string,
+  environmentName: string,
   context: ReturnType<typeof resolveProjectContext>,
 ): Promise<void> {
-  if (context.profiles.includes(profileName)) {
-    logWarning(`"${profileName}" is already linked to this project.`);
-    const makeActive = await confirm({
-      message: `Make "${profileName}" the active profile?`,
-      default: true,
-    });
-    if (makeActive) {
-      setActiveProjectProfile(cwd, profileName);
-      logSuccess(`Active profile is now "${profileName}".`);
-    }
+  if (context.environments.includes(environmentName)) {
+    logWarning(`"${environmentName}" is already linked to this project.`);
     return;
   }
 
-  if (loadConfig(profileName, context.projectId)) {
-    const makeActive =
-      !context.isLinked ||
-      (await confirm({
-        message: `Make "${profileName}" the active profile for this project?`,
-        default: true,
-      }));
-    addProjectProfile(cwd, profileName, { makeActive });
+  if (loadConfig(environmentName, context.projectId)) {
+    addProjectEnvironment(cwd, environmentName);
     const next = resolveProjectContext(cwd);
-    logSuccess(
-      makeActive
-        ? `Linked "${profileName}" and set it as active.`
-        : `Linked "${profileName}". Active remains "${next.activeProfile}".`,
-    );
-    logReview(`Environments: ${formatLinkedProfilesLabel(next)}`);
+    logSuccess(`Linked "${environmentName}".`);
+    logReview(`Environments: ${formatLinkedEnvironmentsLabel(next)}`);
     return;
   }
 
   await runSetup({
-    profile: profileName,
+    environment: environmentName,
     linkProject: true,
   });
 }
@@ -131,16 +109,16 @@ async function linkOrSetupProfile(
 async function linkCurrentDirectory(): Promise<void> {
   const cwd = process.cwd();
   const context = resolveProjectContext(cwd);
-  const profiles = listProfiles();
-  const linked = new Set(context.profiles);
+  const environments = listEnvironments();
+  const linked = new Set(context.environments);
 
   logInfo(
     context.isLinked
-      ? `Adding another environment to ${path.basename(context.projectRoot)} (active: ${context.activeProfile}).`
-      : `Link ${path.basename(context.projectRoot)} to an environment profile.`,
+      ? `Adding another environment to ${path.basename(context.projectRoot)}.`
+      : `Link ${path.basename(context.projectRoot)} to an environment.`,
   );
 
-  const availableExisting = profiles.filter(
+  const availableExisting = environments.filter(
     (name) => !linked.has(name) && name !== "development" && name !== "production",
   );
 
@@ -150,14 +128,14 @@ async function linkCurrentDirectory(): Promise<void> {
       ? "production"
       : "development";
 
-  const pick = await promptEnvironmentProfileName({
+  const pick = await promptEnvironmentName({
     message: context.isLinked
       ? "Which environment do you want to add?"
-      : "Which environment profile do you want to link?",
+      : "Which environment do you want to link?",
     defaultName,
     allowCancel: true,
     offerExisting: availableExisting.length > 0,
-    suggestedCustomName: context.suggestedProfileName,
+    suggestedCustomName: context.suggestedEnvironmentName,
     projectId: context.projectId,
   });
 
@@ -166,95 +144,56 @@ async function linkCurrentDirectory(): Promise<void> {
   }
 
   if (pick.kind === "existing") {
-    const profile = await select({
-      message: "Choose a profile to add",
+    const environment = await select({
+      message: "Choose an environment to add",
       choices: availableExisting.map((name) => ({
-        name: profileChoiceLabel(name, context.activeProfile, context.projectId),
+        name: environmentChoiceLabel(name, context.projectId),
         value: name,
       })),
     });
-    await linkOrSetupProfile(cwd, profile, context);
+    await linkOrSetupEnvironment(cwd, environment, context);
     return;
   }
 
-  await linkOrSetupProfile(cwd, pick.name, context);
+  await linkOrSetupEnvironment(cwd, pick.name, context);
 }
 
-async function switchCurrentProfile(): Promise<void> {
+async function editEnvironment(): Promise<void> {
   const cwd = process.cwd();
   const context = resolveProjectContext(cwd);
+  const environments = listEnvironments();
 
-  if (!context.isLinked || context.profiles.length === 0) {
-    logError("This directory has no linked profiles yet.");
-    logReview("Use Projects → Add environment, or run setup first.");
-    process.exitCode = 1;
-    return;
-  }
-
-  if (context.profiles.length === 1) {
-    logWarning(
-      `Only one environment is linked ("${context.profiles[0]}"). Add another (e.g. production) before switching.`,
-    );
-    const addAnother = await confirm({
-      message: "Add another environment now?",
-      default: true,
-    });
-    if (addAnother) {
-      await linkCurrentDirectory();
-    }
-    return;
-  }
-
-  const profile = await select({
-    message: `Switch active environment for ${path.basename(context.projectRoot)}`,
-    choices: context.profiles.map((name) => ({
-      name: profileChoiceLabel(name, context.activeProfile),
-      value: name,
-    })),
-    default: context.activeProfile ?? context.profile,
-  });
-
-  setActiveProjectProfile(cwd, profile);
-  logSuccess(`Active profile is now "${profile}".`);
-  logReview("Commands without -p will use this environment.");
-}
-
-async function editProfile(): Promise<void> {
-  const cwd = process.cwd();
-  const context = resolveProjectContext(cwd);
-  const profiles = listProfiles();
-
-  const profile =
-    profiles.length === 0
-      ? context.suggestedProfileName
+  const environment =
+    environments.length === 0
+      ? context.suggestedEnvironmentName
       : await select({
-          message: "Edit which profile?",
-          choices: profiles.map((name) => ({
-            name: profileChoiceLabel(name, context.activeProfile, context.projectId),
+          message: "Edit which environment?",
+          choices: environments.map((name) => ({
+            name: environmentChoiceLabel(name, context.projectId),
             value: name,
           })),
-          default: context.activeProfile ?? context.suggestedProfileName,
+          default: context.environment,
         });
 
-  await runSetup({ profile, linkProject: true, forceUpdate: true });
+  await runSetup({ environment, linkProject: true, forceUpdate: true });
 }
 
-async function deleteProfile(): Promise<void> {
-  const profiles = listProfiles();
+async function deleteEnvironment(): Promise<void> {
+  const environments = listEnvironments();
 
-  if (profiles.length === 0) {
-    logError("No profiles to delete.");
+  if (environments.length === 0) {
+    logError("No environments to delete.");
     process.exitCode = 1;
     return;
   }
 
-  const profile = await select({
-    message: "Delete which profile? (removes stored passwords)",
-    choices: profiles.map((name) => ({ name, value: name })),
+  const environment = await select({
+    message: "Delete which environment? (removes stored passwords)",
+    choices: environments.map((name) => ({ name, value: name })),
   });
 
   const confirmed = await confirm({
-    message: `Delete profile "${profile}" and remove stored passwords?`,
+    message: `Delete environment "${environment}" and remove stored passwords?`,
     default: false,
   });
 
@@ -263,12 +202,12 @@ async function deleteProfile(): Promise<void> {
     return;
   }
 
-  deleteConfig(profile);
-  logSuccess(`Deleted profile "${profile}".`);
+  deleteConfig(environment);
+  logSuccess(`Deleted environment "${environment}".`);
 
-  const remaining = listProfiles();
+  const remaining = listEnvironments();
   if (remaining.length === 0) {
-    logReview("No profiles remain. Run `supabase-selfhosted-cli setup` to configure again.");
+    logReview("No environments remain. Run `supabase-selfhosted-cli setup` to configure again.");
   }
 }
 
@@ -276,15 +215,15 @@ async function unlinkCurrentDirectory(): Promise<void> {
   const cwd = process.cwd();
   const context = resolveProjectContext(cwd);
 
-  if (!context.isLinked || context.profiles.length === 0) {
-    logWarning("This directory is not linked to any profile.");
+  if (!context.isLinked || context.environments.length === 0) {
+    logWarning("This directory is not linked to any environment.");
     return;
   }
 
-  if (context.profiles.length === 1) {
-    const profile = context.profiles[0];
+  if (context.environments.length === 1) {
+    const environment = context.environments[0];
     const confirmed = await confirm({
-      message: `Unlink ${path.basename(context.projectRoot)} from "${profile}"? (credentials kept)`,
+      message: `Unlink ${path.basename(context.projectRoot)} from "${environment}"? (credentials kept)`,
       default: false,
     });
 
@@ -294,7 +233,7 @@ async function unlinkCurrentDirectory(): Promise<void> {
     }
 
     removeProjectLink(cwd);
-    logSuccess(`Unlinked ${context.projectRoot}. Profile "${profile}" was kept.`);
+    logSuccess(`Unlinked ${context.projectRoot}. Environment "${environment}" was kept.`);
     return;
   }
 
@@ -313,7 +252,7 @@ async function unlinkCurrentDirectory(): Promise<void> {
 
   if (mode === "all") {
     const confirmed = await confirm({
-      message: `Unlink all environments (${context.profiles.join(", ")})? Credentials stay on disk.`,
+      message: `Unlink all environments (${context.environments.join(", ")})? Credentials stay on disk.`,
       default: false,
     });
     if (!confirmed) {
@@ -322,20 +261,20 @@ async function unlinkCurrentDirectory(): Promise<void> {
     }
 
     removeProjectLink(cwd);
-    logSuccess(`Unlinked ${context.projectRoot}. Profiles were kept.`);
+    logSuccess(`Unlinked ${context.projectRoot}. Environments were kept.`);
     return;
   }
 
-  const profile = await select({
+  const environment = await select({
     message: "Remove which environment from this project?",
-    choices: context.profiles.map((name) => ({
-      name: profileChoiceLabel(name, context.activeProfile),
+    choices: context.environments.map((name) => ({
+      name: environmentChoiceLabel(name),
       value: name,
     })),
   });
 
   const confirmed = await confirm({
-    message: `Remove "${profile}" from this project? (credentials kept)`,
+    message: `Remove "${environment}" from this project? (credentials kept)`,
     default: false,
   });
 
@@ -344,44 +283,44 @@ async function unlinkCurrentDirectory(): Promise<void> {
     return;
   }
 
-  const next = removeProjectProfile(cwd, profile);
+  const next = removeProjectEnvironment(cwd, environment);
   if (!next) {
-    logSuccess(`Removed "${profile}" and unlinked the project (no environments left).`);
+    logSuccess(`Removed "${environment}" and unlinked the project (no environments left).`);
     return;
   }
 
-  logSuccess(`Removed "${profile}" from this project.`);
+  logSuccess(`Removed "${environment}" from this project.`);
   logReview(
-    `Active: ${next.activeProfile}  ·  Linked: ${next.profiles.join(", ")}`,
+    `Linked: ${next.environments.join(", ")}`,
   );
 }
 
-async function showProfileDetails(): Promise<void> {
+async function showEnvironmentDetails(): Promise<void> {
   const cwd = process.cwd();
   const context = resolveProjectContext(cwd);
 
-  if (!context.isLinked && context.profiles.length === 0) {
-    logError("No profile linked. Run setup or add an environment for this directory.");
+  if (!context.isLinked && context.environments.length === 0) {
+    logError("No environment linked. Run setup or add an environment for this directory.");
     process.exitCode = 1;
     return;
   }
 
-  let profile = context.activeProfile ?? context.profile;
-  if (context.profiles.length > 1) {
-    profile = await select({
+  let environment = context.environment;
+  if (context.environments.length > 1) {
+    environment = await select({
       message: "Show details for which environment?",
-      choices: context.profiles.map((name) => ({
-        name: profileChoiceLabel(name, context.activeProfile, context.projectId),
+      choices: context.environments.map((name) => ({
+        name: environmentChoiceLabel(name, context.projectId),
         value: name,
       })),
-      default: profile,
+      default: environment,
     });
   }
 
-  const config = loadConfig(profile, context.projectId);
+  const config = loadConfig(environment, context.projectId);
   if (!config) {
     logError(
-      `Profile "${profile}" is linked but missing. Run setup to recreate it.`,
+      `Environment "${environment}" is linked but missing. Run setup to recreate it.`,
     );
     process.exitCode = 1;
     return;
@@ -398,12 +337,11 @@ async function showProfileDetails(): Promise<void> {
 export async function runProjects(options?: {
   list?: boolean;
   link?: boolean;
-  switch?: boolean;
   edit?: boolean;
   delete?: boolean;
   unlink?: boolean;
   show?: boolean;
-  profile?: string;
+  environment?: string;
 }): Promise<void> {
   if (options?.list) {
     printProjectsList();
@@ -415,18 +353,13 @@ export async function runProjects(options?: {
     return;
   }
 
-  if (options?.switch) {
-    await switchCurrentProfile();
-    return;
-  }
-
   if (options?.edit) {
-    await editProfile();
+    await editEnvironment();
     return;
   }
 
   if (options?.delete) {
-    await deleteProfile();
+    await deleteEnvironment();
     return;
   }
 
@@ -436,14 +369,14 @@ export async function runProjects(options?: {
   }
 
   if (options?.show) {
-    await showProfileDetails();
+    await showEnvironmentDetails();
     return;
   }
 
   const context = resolveProjectContext(process.cwd());
   if (context.isLinked) {
     logInfo(
-      `${path.basename(context.projectRoot)}  ·  ${formatLinkedProfilesLabel(context)}`,
+      `${path.basename(context.projectRoot)}  ·  ${formatLinkedEnvironmentsLabel(context)}`,
     );
   }
 
@@ -454,19 +387,18 @@ export async function runProjects(options?: {
       {
         name: context.isLinked
           ? "Add another environment (e.g. production)"
-          : "Link this directory to a profile",
+          : "Link this directory to an environment",
         value: "link",
       },
-      { name: "Switch active environment", value: "switch" },
       { name: "Show environment details", value: "show" },
-      { name: "Edit profile credentials", value: "edit" },
+      { name: "Edit environment credentials", value: "edit" },
       {
-        name: context.profiles.length > 1
+        name: context.environments.length > 1
           ? "Unlink an environment (or all)"
-          : "Unlink this directory (keep profile)",
+          : "Unlink this directory (keep environment)",
         value: "unlink",
       },
-      { name: "Delete a stored profile", value: "delete" },
+      { name: "Delete a stored environment", value: "delete" },
       { name: "Cancel", value: "cancel" },
     ],
   });
@@ -477,25 +409,22 @@ export async function runProjects(options?: {
 
   switch (action) {
     case "list":
-      await runProjects({ list: true, profile: options?.profile });
+      await runProjects({ list: true, environment: options?.environment });
       break;
     case "link":
-      await runProjects({ link: true, profile: options?.profile });
-      break;
-    case "switch":
-      await runProjects({ switch: true, profile: options?.profile });
+      await runProjects({ link: true, environment: options?.environment });
       break;
     case "show":
-      await runProjects({ show: true, profile: options?.profile });
+      await runProjects({ show: true, environment: options?.environment });
       break;
     case "edit":
-      await runProjects({ edit: true, profile: options?.profile });
+      await runProjects({ edit: true, environment: options?.environment });
       break;
     case "unlink":
-      await runProjects({ unlink: true, profile: options?.profile });
+      await runProjects({ unlink: true, environment: options?.environment });
       break;
     case "delete":
-      await runProjects({ delete: true, profile: options?.profile });
+      await runProjects({ delete: true, environment: options?.environment });
       break;
     default:
       break;

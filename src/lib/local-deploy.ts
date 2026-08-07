@@ -153,7 +153,7 @@ export async function restartLocal(config: SupabaseSelfhostedConfig): Promise<vo
     if (config.deploy.restartCommand.trim() !== resolved.command) {
       saveConfig(persistScopedRestartCommand(config, resolved.command));
       logInfo(
-        `Updated profile "${config.profile}" restart command to the project-scoped version.`,
+        `Updated environment "${config.environment}" restart command to the project-scoped version.`,
       );
     }
   }

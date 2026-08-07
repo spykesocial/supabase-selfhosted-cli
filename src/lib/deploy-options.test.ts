@@ -4,7 +4,7 @@ import { resolveShouldRestart } from "./deploy-options.js";
 import type { SupabaseSelfhostedConfig } from "./config.js";
 
 const baseConfig = {
-  profile: "default",
+  environment: "default",
   target: "ssh",
   deploy: {
     restartAfterDeploy: true,

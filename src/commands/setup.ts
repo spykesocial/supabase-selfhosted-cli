@@ -85,7 +85,9 @@ export async function runSetup(options?: {
     profile = picked.name;
   }
 
-  const existing = loadConfig(profile, context.projectId);
+  const existing = context.projectId
+    ? loadConfig(profile, context.projectId)
+    : null;
 
   if (existing && !options?.forceUpdate) {
     const overwrite = await confirm({

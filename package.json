@@ -26,6 +26,14 @@
     "edge-functions"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/spykesocial/supabase-selfhosted-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/spykesocial/supabase-selfhosted-cli/issues"
+  },
+  "homepage": "https://github.com/spykesocial/supabase-selfhosted-cli#readme",
   "engines": {
     "node": ">=18"
   },

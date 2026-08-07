@@ -302,10 +302,9 @@ export async function runSetup(options?: {
     updatedAt: now,
   };
 
-  saveConfig(config, context.projectId);
-
   if (linkProject) {
-    saveProjectLink(cwd, profile, path.basename(context.projectRoot));
+    const link = saveProjectLink(cwd, profile, path.basename(context.projectRoot));
+    saveConfig(config, link.projectId);
     const next = resolveProjectContext(cwd);
     const linkedLabel = next.profiles.join(", ");
     logSuccess(
@@ -313,6 +312,8 @@ export async function runSetup(options?: {
         ? `Active profile "${profile}". Linked environments: ${linkedLabel}.`
         : `Linked ${context.projectRoot} to profile "${profile}".`,
     );
+  } else {
+    saveConfig(config, context.projectId);
   }
 
   printSummaryBlock("Setup complete", ...formatConfigSummary(config).split("\n"));

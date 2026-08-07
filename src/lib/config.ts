@@ -541,8 +541,8 @@ export function unregisterProject(cwd: string): boolean {
  * Add a profile to the project's linked set and make it active.
  * Existing linked profiles are preserved.
  */
-export function saveProjectLink(cwd: string, profile: string, name?: string): void {
-  addProjectProfile(cwd, profile, { makeActive: true, name });
+export function saveProjectLink(cwd: string, profile: string, name?: string): ProjectLink {
+  return addProjectProfile(cwd, profile, { makeActive: true, name });
 }
 
 export function addProjectProfile(

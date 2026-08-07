@@ -12,8 +12,11 @@ function validateProfileName(value: string): true | string {
   return true;
 }
 
-function labelForEnv(name: "development" | "production"): string {
-  return loadConfig(name) ? `${name} (already configured)` : name;
+function labelForEnv(
+  name: "development" | "production",
+  projectId?: string | null,
+): string {
+  return loadConfig(name, projectId) ? `${name} (already configured)` : name;
 }
 
 export type EnvironmentProfilePick =
@@ -32,10 +35,12 @@ export async function promptEnvironmentProfileName(options?: {
   offerExisting?: boolean;
   /** Prefer this when the user picks Custom name… */
   suggestedCustomName?: string;
+  projectId?: string | null;
 }): Promise<EnvironmentProfilePick> {
+  const projectId = options?.projectId;
   const envChoices = [
-    { name: labelForEnv("development"), value: "development" as const },
-    { name: labelForEnv("production"), value: "production" as const },
+    { name: labelForEnv("development", projectId), value: "development" as const },
+    { name: labelForEnv("production", projectId), value: "production" as const },
     { name: "Custom name…", value: "__custom__" as const },
   ];
 

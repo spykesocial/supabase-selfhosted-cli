@@ -158,6 +158,7 @@ async function linkCurrentDirectory(): Promise<void> {
     allowCancel: true,
     offerExisting: availableExisting.length > 0,
     suggestedCustomName: context.suggestedProfileName,
+    projectId: context.projectId,
   });
 
   if (pick.kind === "cancel") {

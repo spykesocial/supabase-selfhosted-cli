@@ -76,6 +76,7 @@ export async function runSetup(options?: {
         : "development",
       allowCancel: true,
       suggestedCustomName: context.suggestedProfileName,
+      projectId: context.projectId,
     });
     if (picked.kind === "cancel" || picked.kind === "existing") {
       logWarning("Setup cancelled.");

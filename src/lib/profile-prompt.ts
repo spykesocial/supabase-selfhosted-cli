@@ -16,6 +16,7 @@ function labelForEnv(
   name: "development" | "production",
   projectId?: string | null,
 ): string {
+  if (!projectId) return name;
   return loadConfig(name, projectId) ? `${name} (already configured)` : name;
 }
 

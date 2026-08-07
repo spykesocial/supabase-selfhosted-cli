@@ -74,7 +74,7 @@ The wizard asks where your instance runs:
 | Types port            | `5432` (or your exposed Postgres pooler port)                                                  |
 | Restart command       | `docker compose restart edge-runtime` or auto-detect edge container                            |
 
-Setup creates `.supabase-selfhosted-cli.json` in your project so commands know which environment profile(s) to use.
+Setup creates `.supabase-selfhosted-cli.json` in your project so commands know which environment(s) to use.
 
 ## Commands
 
@@ -147,26 +147,25 @@ supabase-selfhosted-cli settings
 
 ## Configuration storage
 
-- Profiles: `~/.supabase-selfhosted-cli/profiles/<name>.json` (mode `600`)
+- Environments: `~/.supabase-selfhosted-cli/profiles/<name>.json` (mode `600`)
 - Project link: `.supabase-selfhosted-cli.json` in your repo
 
 Passwords are stored locally on your machine. Delete them anytime via `supabase-selfhosted-cli settings`.
 
 ## Multiple projects / environments
 
-One repo can link to **multiple** environment profiles (for example `development` and `production`). Credentials live in `~/.supabase-selfhosted-cli/profiles/`; the project link file stores the linked set plus which profile is **active**.
+One repo can link to **multiple** environments (for example `development` and `production`). Credentials live in `~/.supabase-selfhosted-cli/profiles/`; the project link file stores the linked set plus which environment is **active**.
 
 `.supabase-selfhosted-cli.json` shape:
 
 ```json
 {
-  "profiles": ["development", "production"],
-  "activeProfile": "development",
-  "profile": "development"
+  "environments": ["development", "production"],
+  "projectId": "<uuid>"
 }
 ```
 
-Legacy single-field `{ "profile": "…" }` links still work and upgrade automatically.
+Legacy single-field `{ "profile": "…" }` and multi-field `{ "profiles": […] }` links still work and upgrade automatically.
 
 From a project directory:
 
@@ -174,7 +173,7 @@ From a project directory:
 # See linked projects and environments
 supabase-selfhosted-cli projects --list
 
-# First time — creates a profile (folder name, or pick development / production)
+# First time — creates an environment (folder name, or pick development / production)
 supabase-selfhosted-cli setup
 
 # Add another environment without replacing the first
@@ -183,19 +182,19 @@ supabase-selfhosted-cli projects --link
 # Change which environment commands use by default
 supabase-selfhosted-cli projects --switch
 
-# Edit SSH/DB credentials for a profile
+# Edit SSH/DB credentials for an environment
 supabase-selfhosted-cli projects --edit
 
-# Remove stored credentials for a profile
+# Remove stored credentials for an environment
 supabase-selfhosted-cli projects --delete
 ```
 
-Use `-p` to target an environment for a single command (does not change the active default):
+Use `-e` to target an environment for a single command (does not change the active default):
 
 ```bash
-supabase-selfhosted-cli setup --profile production
-supabase-selfhosted-cli db push --profile production
-supabase-selfhosted-cli functions deploy --profile production
+supabase-selfhosted-cli setup --environment production
+supabase-selfhosted-cli db push --environment production
+supabase-selfhosted-cli functions deploy --environment production
 ```
 
 ## Restart command tips
@@ -218,7 +217,7 @@ Avoid host-wide greps like `grep -i edge | head -n 1` when the server runs multi
 ## Roadmap
 
 - OS keychain integration for secrets
-- Remote profile sync for teams
+- Remote environment sync for teams
 - Migration status, function diff, and health checks
 
 ## License

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -36,6 +37,8 @@ export type SupabaseSelfhostedConfig = {
   };
   createdAt: string;
   updatedAt: string;
+  /** Project IDs that have linked this profile. */
+  linkedProjectIds?: string[];
 };
 
 /** On-disk project link. Legacy files may only have `profile`. */
@@ -44,12 +47,14 @@ export type ProjectLink = {
   activeProfile: string;
   /** @deprecated Prefer `activeProfile`; kept for backward-compatible writes. */
   profile: string;
+  projectId: string;
 };
 
 export type ProjectLinkRaw = {
   profile?: string;
   profiles?: string[];
   activeProfile?: string;
+  projectId?: string;
 };
 
 export type ProjectEntry = {
@@ -91,6 +96,21 @@ function registryPath(): string {
 
 function normalizeProjectPath(dir: string): string {
   return path.resolve(dir);
+}
+
+export function generateProjectId(): string {
+  return crypto.randomUUID();
+}
+
+/** Returns the set of project paths that reference this profile. */
+export function findProfileProjects(profile: string): string[] {
+  const registry = loadProjectRegistry();
+  return registry.projects
+    .filter((entry) => {
+      const normalized = normalizeProjectEntry(entry);
+      return normalized.profiles.includes(profile);
+    })
+    .map((entry) => entry.path);
 }
 
 export function suggestProfileName(dir: string): string {
@@ -185,10 +205,16 @@ export function normalizeProjectLink(raw: ProjectLinkRaw | null | undefined): Pr
       ? activeCandidate
       : profiles[0];
 
+  const projectId =
+    typeof raw.projectId === "string" && raw.projectId.trim()
+      ? raw.projectId.trim()
+      : generateProjectId();
+
   return {
     profiles,
     activeProfile,
     profile: activeProfile,
+    projectId,
   };
 }
 
@@ -215,6 +241,7 @@ function writeProjectLinkFile(projectRoot: string, link: ProjectLink): void {
         profiles: normalized.profiles,
         activeProfile: normalized.activeProfile,
         profile: normalized.activeProfile,
+        projectId: normalized.projectId,
       },
       null,
       2,
@@ -462,16 +489,57 @@ export function addProjectProfile(
     : (existing?.activeProfile && profiles.includes(existing.activeProfile)
         ? existing.activeProfile
         : profile);
+  const projectId = existing?.projectId ?? generateProjectId();
 
   const link: ProjectLink = {
     profiles,
     activeProfile,
     profile: activeProfile,
+    projectId,
   };
 
   writeProjectLinkFile(projectRoot, link);
   registerProject(projectRoot, link, options?.name);
+  addProjectIdToProfile(profile, projectId);
   return link;
+}
+
+/** Returns the projectId for the given project directory, reading from the link file. */
+export function getProjectId(cwd: string): string | null {
+  const projectRoot = resolveProjectRoot(cwd);
+  const link = readProjectLinkAt(projectRoot);
+  return link?.projectId ?? null;
+}
+
+function addProjectIdToProfile(profileName: string, projectId: string): void {
+  const config = loadConfig(profileName);
+  if (!config) {
+    return;
+  }
+
+  const ids = new Set(config.linkedProjectIds ?? []);
+  if (ids.has(projectId)) {
+    return;
+  }
+
+  ids.add(projectId);
+  config.linkedProjectIds = [...ids];
+  saveConfig(config);
+}
+
+function removeProjectIdFromProfile(profileName: string, projectId: string): void {
+  const config = loadConfig(profileName);
+  if (!config) {
+    return;
+  }
+
+  const ids = (config.linkedProjectIds ?? []).filter((id) => id !== projectId);
+  if (ids.length === config.linkedProjectIds?.length) {
+    return;
+  }
+
+  config.linkedProjectIds = ids.length > 0 ? ids : undefined;
+  saveConfig(config);
 }
 
 export function setActiveProjectProfile(cwd: string, profile: string): ProjectLink {
@@ -489,6 +557,7 @@ export function setActiveProjectProfile(cwd: string, profile: string): ProjectLi
     profiles: existing.profiles,
     activeProfile: profile,
     profile,
+    projectId: existing.projectId,
   };
 
   writeProjectLinkFile(projectRoot, link);
@@ -513,6 +582,7 @@ export function removeProjectProfile(cwd: string, profile: string): ProjectLink 
 
   const profiles = existing.profiles.filter((name) => name !== profile);
   if (profiles.length === 0) {
+    removeProjectIdFromProfile(profile, existing.projectId);
     removeProjectLink(linkRoot);
     return null;
   }
@@ -523,10 +593,12 @@ export function removeProjectProfile(cwd: string, profile: string): ProjectLink 
     profiles,
     activeProfile,
     profile: activeProfile,
+    projectId: existing.projectId,
   };
 
   writeProjectLinkFile(linkRoot, link);
   registerProject(linkRoot, link);
+  removeProjectIdFromProfile(profile, existing.projectId);
   return link;
 }
 
@@ -534,6 +606,13 @@ export function removeProjectLink(cwd: string): boolean {
   const linkRoot = findProjectLinkRoot(cwd);
   if (!linkRoot) {
     return false;
+  }
+
+  const link = readProjectLinkAt(linkRoot);
+  if (link) {
+    for (const profile of link.profiles) {
+      removeProjectIdFromProfile(profile, link.projectId);
+    }
   }
 
   fs.unlinkSync(projectLinkPath(linkRoot));
@@ -567,6 +646,7 @@ export function detachProfileFromProjects(profile: string): void {
       profiles: nextProfiles,
       activeProfile,
       profile: activeProfile,
+      projectId: generateProjectId(),
     };
     writeProjectLinkFile(normalized.path, link);
     nextProjects.push({
@@ -578,6 +658,12 @@ export function detachProfileFromProjects(profile: string): void {
   }
 
   saveProjectRegistry({ projects: nextProjects });
+
+  const config = loadConfig(profile);
+  if (config) {
+    config.linkedProjectIds = undefined;
+    saveConfig(config);
+  }
 }
 
 export function formatProjectContextSummary(context: ProjectContext): string {

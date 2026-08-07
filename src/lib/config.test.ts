@@ -110,39 +110,36 @@ describe("loadConfig normalization", () => {
 
 describe("normalizeProjectLink", () => {
   it("upgrades a legacy single-profile link", () => {
-    assert.deepEqual(normalizeProjectLink({ profile: "development" }), {
-      profiles: ["development"],
-      activeProfile: "development",
-      profile: "development",
-    });
+    const result = normalizeProjectLink({ profile: "development" });
+    assert.equal(result?.profiles.length, 1);
+    assert.equal(result?.profiles[0], "development");
+    assert.equal(result?.activeProfile, "development");
+    assert.equal(result?.profile, "development");
+    assert.ok(typeof result?.projectId === "string" && result.projectId.length > 0);
   });
 
   it("keeps multiple profiles and an active selection", () => {
-    assert.deepEqual(
-      normalizeProjectLink({
-        profiles: ["development", "production"],
-        activeProfile: "production",
-      }),
-      {
-        profiles: ["development", "production"],
-        activeProfile: "production",
-        profile: "production",
-      },
-    );
+    const result = normalizeProjectLink({
+      profiles: ["development", "production"],
+      activeProfile: "production",
+      projectId: "test-uuid-123",
+    });
+    assert.deepEqual(result, {
+      profiles: ["development", "production"],
+      activeProfile: "production",
+      profile: "production",
+      projectId: "test-uuid-123",
+    });
   });
 
   it("falls back to the first profile when active is missing from the set", () => {
-    assert.deepEqual(
-      normalizeProjectLink({
-        profiles: ["development", "production"],
-        activeProfile: "staging",
-      }),
-      {
-        profiles: ["development", "production"],
-        activeProfile: "development",
-        profile: "development",
-      },
-    );
+    const result = normalizeProjectLink({
+      profiles: ["development", "production"],
+      activeProfile: "staging",
+    });
+    assert.equal(result?.activeProfile, "development");
+    assert.equal(result?.profiles.length, 2);
+    assert.ok(typeof result?.projectId === "string");
   });
 
   it("returns null for empty links", () => {

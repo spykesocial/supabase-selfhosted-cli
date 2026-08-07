@@ -5,7 +5,7 @@ import { runDbPush } from "../commands/db-push.js";
 import { runFunctionsDeploy } from "../commands/functions-deploy.js";
 import { runGenTypes } from "../commands/gen-types.js";
 import { runProjects } from "../commands/projects.js";
-import { runSettings } from "../commands/settings.js";
+import { runResetSetup, runSettings } from "../commands/settings.js";
 import { runSetup } from "../commands/setup.js";
 import { formatLinkedProfilesLabel, resolveProjectContext } from "./config.js";
 import {
@@ -60,6 +60,13 @@ const MENU_ITEMS: MenuItem[] = [
     description: "Add, switch, or manage environments",
     run: async () => {
       await runProjects();
+    },
+  },
+  {
+    label: "Reset Setup",
+    description: "Wipe all config & unlink this project",
+    run: async () => {
+      await runResetSetup();
     },
   },
   {

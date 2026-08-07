@@ -5,6 +5,7 @@ import {
   formatProjectContextSummary,
   listProfiles,
   loadConfig,
+  resetProjectSetup,
   resolveProjectContext,
 } from "../lib/config.js";
 import { logError, logReview, logSuccess, logWarning, printSummaryBlock } from "../lib/ui.js";
@@ -37,6 +38,7 @@ export async function runSettings(options?: { profile?: string }): Promise<void>
       { name: "Re-run setup wizard (update credentials)", value: "setup" },
       { name: "Manage environments (add / switch / unlink)", value: "projects" },
       { name: "Delete stored credentials for this profile", value: "delete" },
+      { name: "Reset setup for this project (wipe all config & unlink)", value: "reset" },
       { name: "Cancel", value: "cancel" },
     ],
   });
@@ -85,4 +87,46 @@ export async function runSettings(options?: { profile?: string }): Promise<void>
       logReview("No profiles remain. Run `supabase-selfhosted-cli setup` to configure again.");
     }
   }
+
+  if (action === "reset") {
+    await runResetSetup();
+  }
+}
+
+export async function runResetSetup(): Promise<void> {
+  const cwd = process.cwd();
+  const context = resolveProjectContext(cwd);
+
+  if (!context.isLinked && context.profiles.length === 0) {
+    logError("This directory is not linked to any profiles. Nothing to reset.");
+    process.exitCode = 1;
+    return;
+  }
+
+  const profileCount = context.profiles.length;
+  const label = profileCount > 0
+    ? `${profileCount} profile${profileCount > 1 ? "s" : ""}`
+    : "the project link";
+
+  const confirmed = await confirm({
+    message: `Reset setup for this project? This will wipe ${label} and delete the .supabase-selfhosted-cli.json file.`,
+    default: false,
+  });
+
+  if (!confirmed) {
+    logWarning("Cancelled.");
+    return;
+  }
+
+  const result = resetProjectSetup(cwd);
+
+  if (result.profilesRemoved.length > 0) {
+    logSuccess(`Deleted ${result.profilesRemoved.length} profile(s): ${result.profilesRemoved.join(", ")}.`);
+  }
+
+  if (result.linkFileDeleted) {
+    logSuccess("Deleted .supabase-selfhosted-cli.json link file.");
+  }
+
+  logReview("Setup reset complete. Run `supabase-selfhosted-cli setup` to reconfigure.");
 }

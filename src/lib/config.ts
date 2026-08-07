@@ -649,6 +649,54 @@ export function removeProjectLink(cwd: string): boolean {
   return true;
 }
 
+export type ResetResult = {
+  profilesRemoved: string[];
+  linkFileDeleted: boolean;
+  registryEntryRemoved: boolean;
+};
+
+/**
+ * Fully reset setup for the current project:
+ *   - Deletes all profile config files in the namespaced directory
+ *   - Deletes the .supabase-selfhosted-cli.json link file
+ *   - Removes the project from the registry
+ */
+export function resetProjectSetup(cwd: string): ResetResult {
+  const result: ResetResult = {
+    profilesRemoved: [],
+    linkFileDeleted: false,
+    registryEntryRemoved: false,
+  };
+
+  const context = resolveProjectContext(cwd);
+  const projectId = context.projectId;
+
+  if (projectId) {
+    const profilesDir = path.join(CONFIG_DIR, "profiles", projectId);
+    if (fs.existsSync(profilesDir)) {
+      for (const entry of fs.readdirSync(profilesDir)) {
+        if (entry.endsWith(".json")) {
+          const profile = entry.replace(/\.json$/, "");
+          const filePath = path.join(profilesDir, entry);
+          fs.unlinkSync(filePath);
+          result.profilesRemoved.push(profile);
+        }
+      }
+      const remaining = fs.existsSync(profilesDir)
+        ? fs.readdirSync(profilesDir).filter((e) => !e.startsWith("."))
+        : [];
+      if (remaining.length === 0) {
+        fs.rmdirSync(profilesDir);
+      }
+    }
+  }
+
+  result.linkFileDeleted = removeProjectLink(cwd);
+  result.registryEntryRemoved = result.linkFileDeleted || unregisterProject(cwd);
+
+  return result;
+}
+
 /** Drop a deleted profile from every project link / registry entry. */
 export function detachProfileFromProjects(profile: string): void {
   const registry = loadProjectRegistry();

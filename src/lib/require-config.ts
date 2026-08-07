@@ -5,7 +5,7 @@ export async function requireConfig(profile?: string) {
   const cwd = process.cwd();
   const context = resolveProjectContext(cwd, profile);
   const resolvedProfile = context.profile;
-  const config = loadConfig(resolvedProfile);
+  const config = loadConfig(resolvedProfile, context.projectId);
 
   if (!config) {
     if (!context.isLinked && !profile) {

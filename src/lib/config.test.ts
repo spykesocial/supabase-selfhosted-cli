@@ -158,6 +158,7 @@ describe("formatLinkedProfilesLabel", () => {
       activeProfile: null,
       isLinked: false,
       suggestedProfileName: "app",
+      projectId: null,
     };
     assert.match(formatLinkedProfilesLabel(context), /not linked/);
   });
@@ -171,6 +172,7 @@ describe("formatLinkedProfilesLabel", () => {
       activeProfile: "development",
       isLinked: true,
       suggestedProfileName: "app",
+      projectId: "test-uuid",
     };
     assert.equal(
       formatLinkedProfilesLabel(context),

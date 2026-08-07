@@ -37,8 +37,6 @@ export type SupabaseSelfhostedConfig = {
   };
   createdAt: string;
   updatedAt: string;
-  /** Project IDs that have linked this profile. */
-  linkedProjectIds?: string[];
 };
 
 /** On-disk project link. Legacy files may only have `profile`. */
@@ -65,6 +63,7 @@ export type ProjectEntry = {
   activeProfile: string;
   name: string;
   linkedAt: string;
+  projectId: string | null;
 };
 
 export type ProjectRegistry = {
@@ -80,9 +79,13 @@ export type ProjectContext = {
   activeProfile: string | null;
   isLinked: boolean;
   suggestedProfileName: string;
+  projectId: string | null;
 };
 
-function profilePath(profile: string): string {
+function profilePath(profile: string, projectId?: string | null): string {
+  if (projectId) {
+    return path.join(CONFIG_DIR, "profiles", projectId, `${profile}.json`);
+  }
   return path.join(CONFIG_DIR, "profiles", `${profile}.json`);
 }
 
@@ -127,14 +130,24 @@ export function resolveProjectRoot(cwd: string): string {
   return findSupabaseProjectRoot(cwd) ?? normalizeProjectPath(cwd);
 }
 
-export function ensureConfigDir(): void {
-  fs.mkdirSync(path.join(CONFIG_DIR, "profiles"), { recursive: true, mode: 0o700 });
+export function ensureConfigDir(projectId?: string | null): void {
+  const dir = projectId
+    ? path.join(CONFIG_DIR, "profiles", projectId)
+    : path.join(CONFIG_DIR, "profiles");
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 }
 
-export function saveConfig(config: SupabaseSelfhostedConfig): void {
-  ensureConfigDir();
-  const filePath = profilePath(config.profile);
+export function saveConfig(config: SupabaseSelfhostedConfig, projectId?: string | null): void {
+  const filePath = profilePath(config.profile, projectId);
+  ensureConfigDir(projectId);
   fs.writeFileSync(filePath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  // Migrate: if saving to a namespaced path, remove the bare legacy file if it exists
+  if (projectId) {
+    const barePath = profilePath(config.profile);
+    if (barePath !== filePath && fs.existsSync(barePath)) {
+      fs.unlinkSync(barePath);
+    }
+  }
 }
 
 function normalizeConfig(raw: SupabaseSelfhostedConfig): SupabaseSelfhostedConfig {
@@ -148,7 +161,16 @@ function normalizeConfig(raw: SupabaseSelfhostedConfig): SupabaseSelfhostedConfi
   };
 }
 
-export function loadConfig(profile = DEFAULT_PROFILE): SupabaseSelfhostedConfig | null {
+export function loadConfig(profile = DEFAULT_PROFILE, projectId?: string | null): SupabaseSelfhostedConfig | null {
+  // Try namespaced path first, then bare path (backward compat)
+  if (projectId) {
+    const namespacedPath = profilePath(profile, projectId);
+    if (fs.existsSync(namespacedPath)) {
+      const raw = JSON.parse(fs.readFileSync(namespacedPath, "utf8")) as SupabaseSelfhostedConfig;
+      return normalizeConfig(raw);
+    }
+  }
+
   const filePath = profilePath(profile);
   if (!fs.existsSync(filePath)) {
     return null;
@@ -158,9 +180,18 @@ export function loadConfig(profile = DEFAULT_PROFILE): SupabaseSelfhostedConfig 
   return normalizeConfig(raw);
 }
 
-export function deleteConfig(profile = DEFAULT_PROFILE): boolean {
-  const filePath = profilePath(profile);
+export function deleteConfig(profile = DEFAULT_PROFILE, projectId?: string | null): boolean {
+  const filePath = profilePath(profile, projectId);
   if (!fs.existsSync(filePath)) {
+    if (projectId) {
+      // Also try bare path for backward compat
+      const barePath = profilePath(profile);
+      if (fs.existsSync(barePath)) {
+        fs.unlinkSync(barePath);
+        detachProfileFromProjects(profile);
+        return true;
+      }
+    }
     return false;
   }
 
@@ -169,16 +200,49 @@ export function deleteConfig(profile = DEFAULT_PROFILE): boolean {
   return true;
 }
 
-export function listProfiles(): string[] {
+export function listProfiles(projectId?: string | null): string[] {
+  if (projectId) {
+    const projectProfilesDir = path.join(CONFIG_DIR, "profiles", projectId);
+    if (!fs.existsSync(projectProfilesDir)) {
+      return [];
+    }
+    return fs
+      .readdirSync(projectProfilesDir)
+      .filter((name) => name.endsWith(".json"))
+      .map((name) => name.replace(/\.json$/, ""));
+  }
+
   const profilesDir = path.join(CONFIG_DIR, "profiles");
   if (!fs.existsSync(profilesDir)) {
     return [];
   }
 
-  return fs
-    .readdirSync(profilesDir)
-    .filter((name) => name.endsWith(".json"))
-    .map((name) => name.replace(/\.json$/, ""));
+  const profiles: string[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of fs.readdirSync(profilesDir)) {
+    const fullPath = path.join(profilesDir, entry);
+    if (entry.endsWith(".json")) {
+      const name = entry.replace(/\.json$/, "");
+      if (!seen.has(name)) {
+        seen.add(name);
+        profiles.push(name);
+      }
+    } else if (fs.statSync(fullPath).isDirectory()) {
+      const subDir = path.join(profilesDir, entry);
+      for (const subEntry of fs.readdirSync(subDir)) {
+        if (subEntry.endsWith(".json")) {
+          const name = subEntry.replace(/\.json$/, "");
+          if (!seen.has(name)) {
+            seen.add(name);
+            profiles.push(name);
+          }
+        }
+      }
+    }
+  }
+
+  return profiles;
 }
 
 export function normalizeProjectLink(raw: ProjectLinkRaw | null | undefined): ProjectLink | null {
@@ -312,6 +376,7 @@ export function resolveProjectContext(
       activeProfile: link?.activeProfile ?? null,
       isLinked: Boolean(link?.profiles.includes(explicitProfile)),
       suggestedProfileName,
+      projectId: link?.projectId ?? null,
     };
   }
 
@@ -325,6 +390,7 @@ export function resolveProjectContext(
       activeProfile: link.activeProfile,
       isLinked: true,
       suggestedProfileName,
+      projectId: link.projectId,
     };
   }
 
@@ -336,6 +402,7 @@ export function resolveProjectContext(
     activeProfile: null,
     isLinked: false,
     suggestedProfileName,
+    projectId: null,
   };
 }
 
@@ -399,6 +466,7 @@ function normalizeProjectEntry(entry: ProjectEntry): ProjectEntry {
       profiles: entry.profile ? [entry.profile] : [],
       activeProfile: entry.profile,
       profile: entry.profile,
+      projectId: entry.projectId ?? null,
     };
   }
 
@@ -407,6 +475,7 @@ function normalizeProjectEntry(entry: ProjectEntry): ProjectEntry {
     profiles: link.profiles,
     activeProfile: link.activeProfile,
     profile: link.activeProfile,
+    projectId: link.projectId,
   };
 }
 
@@ -439,6 +508,7 @@ export function registerProject(
     activeProfile: link.activeProfile,
     name: name ?? existing?.name ?? path.basename(normalizedPath),
     linkedAt: existing?.linkedAt ?? new Date().toISOString(),
+    projectId: link.projectId,
   };
 
   if (existingIndex >= 0) {
@@ -500,7 +570,6 @@ export function addProjectProfile(
 
   writeProjectLinkFile(projectRoot, link);
   registerProject(projectRoot, link, options?.name);
-  addProjectIdToProfile(profile, projectId);
   return link;
 }
 
@@ -509,37 +578,6 @@ export function getProjectId(cwd: string): string | null {
   const projectRoot = resolveProjectRoot(cwd);
   const link = readProjectLinkAt(projectRoot);
   return link?.projectId ?? null;
-}
-
-function addProjectIdToProfile(profileName: string, projectId: string): void {
-  const config = loadConfig(profileName);
-  if (!config) {
-    return;
-  }
-
-  const ids = new Set(config.linkedProjectIds ?? []);
-  if (ids.has(projectId)) {
-    return;
-  }
-
-  ids.add(projectId);
-  config.linkedProjectIds = [...ids];
-  saveConfig(config);
-}
-
-function removeProjectIdFromProfile(profileName: string, projectId: string): void {
-  const config = loadConfig(profileName);
-  if (!config) {
-    return;
-  }
-
-  const ids = (config.linkedProjectIds ?? []).filter((id) => id !== projectId);
-  if (ids.length === config.linkedProjectIds?.length) {
-    return;
-  }
-
-  config.linkedProjectIds = ids.length > 0 ? ids : undefined;
-  saveConfig(config);
 }
 
 export function setActiveProjectProfile(cwd: string, profile: string): ProjectLink {
@@ -582,7 +620,6 @@ export function removeProjectProfile(cwd: string, profile: string): ProjectLink 
 
   const profiles = existing.profiles.filter((name) => name !== profile);
   if (profiles.length === 0) {
-    removeProjectIdFromProfile(profile, existing.projectId);
     removeProjectLink(linkRoot);
     return null;
   }
@@ -598,7 +635,6 @@ export function removeProjectProfile(cwd: string, profile: string): ProjectLink 
 
   writeProjectLinkFile(linkRoot, link);
   registerProject(linkRoot, link);
-  removeProjectIdFromProfile(profile, existing.projectId);
   return link;
 }
 
@@ -606,13 +642,6 @@ export function removeProjectLink(cwd: string): boolean {
   const linkRoot = findProjectLinkRoot(cwd);
   if (!linkRoot) {
     return false;
-  }
-
-  const link = readProjectLinkAt(linkRoot);
-  if (link) {
-    for (const profile of link.profiles) {
-      removeProjectIdFromProfile(profile, link.projectId);
-    }
   }
 
   fs.unlinkSync(projectLinkPath(linkRoot));
@@ -654,16 +683,11 @@ export function detachProfileFromProjects(profile: string): void {
       profiles: nextProfiles,
       activeProfile,
       profile: activeProfile,
+      projectId: normalized.projectId,
     });
   }
 
   saveProjectRegistry({ projects: nextProjects });
-
-  const config = loadConfig(profile);
-  if (config) {
-    config.linkedProjectIds = undefined;
-    saveConfig(config);
-  }
 }
 
 export function formatProjectContextSummary(context: ProjectContext): string {

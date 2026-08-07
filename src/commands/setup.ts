@@ -7,9 +7,7 @@ import {
   select,
 } from "@inquirer/prompts";
 import {
-  findProfileProjects,
   formatConfigSummary,
-  getProjectId,
   loadConfig,
   resolveProjectContext,
   saveConfig,
@@ -86,51 +84,17 @@ export async function runSetup(options?: {
     profile = picked.name;
   }
 
-  const existing = loadConfig(profile);
+  const existing = loadConfig(profile, context.projectId);
 
-  if (existing) {
-    const otherProjects = findProfileProjects(profile).filter(
-      (projectPath) => projectPath !== context.projectRoot,
-    );
-    const currentProjectId = getProjectId(cwd);
+  if (existing && !options?.forceUpdate) {
+    const overwrite = await confirm({
+      message: `Profile "${profile}" already exists. Overwrite it?`,
+      default: false,
+    });
 
-    if (otherProjects.length > 0) {
-      const projectLabel =
-        otherProjects.length === 1 ? path.basename(otherProjects[0]) : `${otherProjects.length} other projects`;
-      const isDifferentProject =
-        !currentProjectId ||
-        !existing.linkedProjectIds?.includes(currentProjectId);
-
-      if (isDifferentProject) {
-        logWarning(
-          `Profile "${profile}" is already used by ${projectLabel}. Overwriting it will break those projects.`,
-        );
-        logInfo(
-          `Tip: Use a project-specific name. Suggested: "${context.suggestedProfileName}".`,
-        );
-
-        const proceedAnyway = await confirm({
-          message: "Overwrite anyway? (This will change credentials for all linked projects)",
-          default: false,
-        });
-
-        if (!proceedAnyway) {
-          logWarning("Setup cancelled. Consider using a unique profile name for this project.");
-          return null;
-        }
-      }
-    }
-
-    if (!options?.forceUpdate) {
-      const overwrite = await confirm({
-        message: `Profile "${profile}" already exists. Overwrite it?`,
-        default: false,
-      });
-
-      if (!overwrite) {
-        logWarning("Setup cancelled.");
-        return existing;
-      }
+    if (!overwrite) {
+      logWarning("Setup cancelled.");
+      return existing;
     }
   }
 
@@ -333,10 +297,9 @@ export async function runSetup(options?: {
     },
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
-    linkedProjectIds: existing?.linkedProjectIds,
   };
 
-  saveConfig(config);
+  saveConfig(config, context.projectId);
 
   if (linkProject) {
     saveProjectLink(cwd, profile, path.basename(context.projectRoot));

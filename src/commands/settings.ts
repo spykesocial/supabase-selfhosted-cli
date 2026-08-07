@@ -14,7 +14,7 @@ export async function runSettings(options?: { profile?: string }): Promise<void>
   const cwd = process.cwd();
   const context = resolveProjectContext(cwd, options?.profile);
   const profile = context.profile;
-  const config = loadConfig(profile);
+  const config = loadConfig(profile, context.projectId);
 
   if (!config) {
     if (!context.isLinked && !options?.profile) {
@@ -67,7 +67,7 @@ export async function runSettings(options?: { profile?: string }): Promise<void>
   }
 
   if (action === "delete") {
-    const profiles = listProfiles();
+    const profiles = listProfiles(context.projectId);
     const confirmed = await confirm({
       message: `Delete profile "${profile}" and remove stored passwords?`,
       default: false,
@@ -78,7 +78,7 @@ export async function runSettings(options?: { profile?: string }): Promise<void>
       return;
     }
 
-    deleteConfig(profile);
+    deleteConfig(profile, context.projectId);
     logSuccess(`Deleted profile "${profile}".`);
 
     if (profiles.length === 1) {

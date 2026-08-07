@@ -31,7 +31,7 @@ import { runSetup } from "./setup.js";
 function formatProjectRow(entry: ProjectEntry): string {
   const profiles = entry.profiles?.length ? entry.profiles : [entry.profile];
   const active = entry.activeProfile ?? entry.profile;
-  const config = loadConfig(active);
+  const config = loadConfig(active, entry.projectId);
   const target = config ? formatProfileTargetSummary(config) : "(profile missing)";
   const envLabel =
     profiles.length === 1
@@ -40,8 +40,8 @@ function formatProjectRow(entry: ProjectEntry): string {
   return `${entry.name} → ${envLabel} · ${target}`;
 }
 
-function profileChoiceLabel(name: string, active?: string | null): string {
-  const config = loadConfig(name);
+function profileChoiceLabel(name: string, active?: string | null, projectId?: string | null): string {
+  const config = loadConfig(name, projectId);
   const target = config ? formatProfileTargetSummary(config) : "missing credentials";
   const marker = name === active ? " ★ active" : "";
   return `${name}${marker}  ·  ${target}`;
@@ -104,7 +104,7 @@ async function linkOrSetupProfile(
     return;
   }
 
-  if (loadConfig(profileName)) {
+  if (loadConfig(profileName, context.projectId)) {
     const makeActive =
       !context.isLinked ||
       (await confirm({
@@ -168,7 +168,7 @@ async function linkCurrentDirectory(): Promise<void> {
     const profile = await select({
       message: "Choose a profile to add",
       choices: availableExisting.map((name) => ({
-        name: profileChoiceLabel(name, context.activeProfile),
+        name: profileChoiceLabel(name, context.activeProfile, context.projectId),
         value: name,
       })),
     });
@@ -229,7 +229,7 @@ async function editProfile(): Promise<void> {
       : await select({
           message: "Edit which profile?",
           choices: profiles.map((name) => ({
-            name: profileChoiceLabel(name, context.activeProfile),
+            name: profileChoiceLabel(name, context.activeProfile, context.projectId),
             value: name,
           })),
           default: context.activeProfile ?? context.suggestedProfileName,
@@ -370,14 +370,14 @@ async function showProfileDetails(): Promise<void> {
     profile = await select({
       message: "Show details for which environment?",
       choices: context.profiles.map((name) => ({
-        name: profileChoiceLabel(name, context.activeProfile),
+        name: profileChoiceLabel(name, context.activeProfile, context.projectId),
         value: name,
       })),
       default: profile,
     });
   }
 
-  const config = loadConfig(profile);
+  const config = loadConfig(profile, context.projectId);
   if (!config) {
     logError(
       `Profile "${profile}" is linked but missing. Run setup to recreate it.`,

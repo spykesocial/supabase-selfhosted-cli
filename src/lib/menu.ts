@@ -13,10 +13,12 @@ import {
   formatHelp,
   formatVersion,
   hideCursor,
+  icons,
+  paint,
+  paintBrand,
   showBrandBanner,
   showCursor,
   showHelp,
-  showMenuOption,
 } from "./ui.js";
 
 type MenuItem = {
@@ -26,13 +28,6 @@ type MenuItem = {
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  {
-    label: "Setup",
-    description: "Configure an environment",
-    run: async () => {
-      await runSetup({ linkProject: true });
-    },
-  },
   {
     label: "Deploy",
     description: "Push edge functions to your instance",
@@ -55,17 +50,17 @@ const MENU_ITEMS: MenuItem[] = [
     },
   },
   {
+    label: "Setup",
+    description: "Configure an environment",
+    run: async () => {
+      await runSetup({ linkProject: true });
+    },
+  },
+  {
     label: "Projects",
     description: "Add, switch, or manage environments",
     run: async () => {
       await runProjects();
-    },
-  },
-  {
-    label: "Reset Setup",
-    description: "Wipe all config & unlink this project",
-    run: async () => {
-      await runResetSetup();
     },
   },
   {
@@ -75,60 +70,90 @@ const MENU_ITEMS: MenuItem[] = [
       await runSettings();
     },
   },
+  {
+    label: "Reset Setup",
+    description: "Wipe all config & unlink this project",
+    run: async () => {
+      await runResetSetup();
+    },
+  },
 ];
+
+const LABEL_COLUMN = 12;
 
 function clearScreen(): void {
   process.stdout.write("\u001b[2J\u001b[H");
-}
-
-function renderMenuContext(): string[] {
-  const context = resolveProjectContext(process.cwd());
-  const projectName = path.basename(context.projectRoot);
-  const envLabel =   formatLinkedEnvironmentsLabel(context);
-
-  const projectLine = `${colors.gray}Project: ${projectName}${colors.nc}`;
-  const envLine = `${colors.gray}Environment: ${envLabel}${colors.nc}`;
-
-  return [projectLine, envLine];
 }
 
 function clearLine(): string {
   return "\r\u001b[2K";
 }
 
+function renderMenuContext(): string[] {
+  const context = resolveProjectContext(process.cwd());
+  const projectName = path.basename(context.projectRoot);
+  const envLabel = formatLinkedEnvironmentsLabel(context);
+
+  const dim = (text: string) => paint(text, "gray");
+  return [
+    `${dim("Project:")}     ${paint(projectName, "cyan")}`,
+    `${dim("Environment:")} ${paint(envLabel, "cyan")}`,
+  ];
+}
+
+function renderMenuItem(
+  number: number,
+  label: string,
+  description: string,
+  selected: boolean,
+): string {
+  const padded = label.padEnd(LABEL_COLUMN);
+  const desc = paint(description, "gray");
+
+  if (selected) {
+    return `  ${paint(icons.arrow, "cyan")} ${paintBrand(String(number).padStart(2))}  ${paintBrand(padded)}${desc}`;
+  }
+
+  return `    ${paint(String(number).padStart(2), "gray")}  ${paint(padded, "blue")}${desc}`;
+}
+
 function renderMenu(selected: number): void {
   clearScreen();
 
-  for (const line of showBrandBanner().split("\n")) {
-    process.stdout.write(`${clearLine()}${line}\n`);
-  }
+  const lines: string[] = [];
 
-  process.stdout.write(`${clearLine()}\n`);
+  lines.push(showBrandBanner());
+  lines.push("");
 
   for (const line of renderMenuContext()) {
-    process.stdout.write(`${clearLine()}${line}\n`);
+    lines.push(line);
   }
 
-  process.stdout.write(`${clearLine()}\n`);
+  let number = 0;
+  lines.push("");
+  for (const item of MENU_ITEMS) {
+    number += 1;
+    lines.push(renderMenuItem(number, item.label, item.description, selected === number));
+  }
 
-  MENU_ITEMS.forEach((item, index) => {
-    const line = showMenuOption(
-      index + 1,
-      item.label,
-      item.description,
-      selected === index + 1,
-    );
-    process.stdout.write(`${clearLine()}${line}\n`);
-  });
+  lines.push("");
 
   if (process.stdin.isTTY) {
-    process.stdout.write(`${clearLine()}\n`);
-    const controls = `${colors.gray}↑↓  |  Enter  |  M More  |  V Version  |  Q Quit${colors.nc}`;
-    process.stdout.write(`${clearLine()}${controls}\n`);
-    process.stdout.write(`${clearLine()}\n`);
+    const sep = ` ${paint("·", "gray")} `;
+    const controls = [
+      `${paint(`${icons.navUp}${icons.navDown}`, "gray")} navigate`,
+      `${paint("↵", "gray")} select`,
+      `${paint("1-9", "gray")} jump`,
+      `${paint("m", "gray")} more`,
+      `${paint("v", "gray")} version`,
+      `${paint("q", "gray")} quit`,
+    ].join(sep);
+    lines.push(controls);
   }
 
-  process.stdout.write("\u001b[J");
+  lines.push("");
+  process.stdout.write(lines.map((line) => `${clearLine()}${line}`).join("\n"));
+  process.stdout.write("\n\u001b[J");
 }
 
 type KeyAction =

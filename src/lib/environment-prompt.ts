@@ -1,4 +1,4 @@
-import { input, select } from "@inquirer/prompts";
+import { inputPrompt, selectPrompt } from "./prompts.js";
 import { loadConfig } from "./config.js";
 
 function validateEnvironmentName(value: string): true | string {
@@ -58,7 +58,7 @@ export async function promptEnvironmentName(options?: {
   const defaultChoice =
     options?.defaultName === "production" ? "production" : "development";
 
-  const picked = await select({
+  const picked = await selectPrompt({
     message: options?.message ?? "Which environment?",
     choices,
     default: defaultChoice,
@@ -84,7 +84,7 @@ export async function promptEnvironmentName(options?: {
       ? options.defaultName.trim()
       : "staging");
 
-  const custom = await input({
+  const custom = await inputPrompt({
     message: "Environment name",
     default: customDefault,
     validate: validateEnvironmentName,

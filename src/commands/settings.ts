@@ -1,4 +1,4 @@
-import { confirm, select } from "@inquirer/prompts";
+import { confirmPrompt, selectPrompt } from "../lib/prompts.js";
 import {
   deleteConfig,
   formatConfigSummary,
@@ -31,7 +31,7 @@ export async function runSettings(options?: { environment?: string }): Promise<v
     return;
   }
 
-  const action = await select({
+  const action = await selectPrompt({
     message: `Settings · ${environment}${context.environments.length > 1 ? ` (${context.environments.length} environments)` : ""}`,
     choices: [
       { name: "Show current configuration", value: "show" },
@@ -70,7 +70,7 @@ export async function runSettings(options?: { environment?: string }): Promise<v
 
   if (action === "delete") {
     const environments = listEnvironments(context.projectId);
-    const confirmed = await confirm({
+    const confirmed = await confirmPrompt({
       message: `Delete environment "${environment}" and remove stored passwords?`,
       default: false,
     });
@@ -108,7 +108,7 @@ export async function runResetSetup(): Promise<void> {
     ? `${envCount} environment${envCount > 1 ? "s" : ""}`
     : "the project link";
 
-  const confirmed = await confirm({
+  const confirmed = await confirmPrompt({
     message: `Reset setup for this project? This will wipe ${label} and delete the .supabase-selfhosted-cli.json file.`,
     default: false,
   });

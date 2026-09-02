@@ -1,4 +1,4 @@
-import { select } from "@inquirer/prompts";
+import { selectPrompt } from "./prompts.js";
 import { loadConfig, resolveProjectContext } from "./config.js";
 import { logError, logWarning } from "./ui.js";
 
@@ -14,13 +14,23 @@ export async function requireConfig(environment?: string) {
     if (context.environments.length === 1) {
       resolvedEnvironment = context.environments[0];
     } else {
-      resolvedEnvironment = await select({
+      const picked = await selectPrompt({
         message: "Which environment do you want to use?",
-        choices: context.environments.map((name) => ({
-          name,
-          value: name,
-        })),
+        choices: [
+          ...context.environments.map((name) => ({
+            name,
+            value: name,
+          })),
+          { name: "Cancel", value: "__cancel__" as const },
+        ],
       });
+
+      if (picked === "__cancel__") {
+        process.exitCode = 0;
+        return null;
+      }
+
+      resolvedEnvironment = picked;
     }
   } else {
     logError(

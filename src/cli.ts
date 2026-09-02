@@ -7,6 +7,7 @@ import { runGenTypes } from "./commands/gen-types.js";
 import { runProjects } from "./commands/projects.js";
 import { runSettings } from "./commands/settings.js";
 import { runSetup } from "./commands/setup.js";
+import { runLogin, runLogout, runWhoami } from "./commands/login.js";
 import { runInteractiveMenu } from "./lib/menu.js";
 import { logError, showHelp, showVersion, VERSION } from "./lib/ui.js";
 
@@ -59,6 +60,29 @@ program
   .option("-e, --environment <name>", "Environment name")
   .action(async (options: { environment?: string }) => {
     await runSettings(options);
+  });
+
+program
+  .command("login")
+  .description("Sign in to the Velocilabs Engine (email/password or API token)")
+  .option("--base-url <url>", "Engine base URL (defaults to $ENGINE_URL or http://localhost:3000)")
+  .option("--token <token>", "Use an API token generated in the dashboard instead of email/password")
+  .action(async (options: { baseUrl?: string; token?: string }) => {
+    await runLogin({ baseUrl: options.baseUrl, token: options.token });
+  });
+
+program
+  .command("logout")
+  .description("Sign out of the Velocilabs Engine")
+  .action(async () => {
+    await runLogout();
+  });
+
+program
+  .command("whoami")
+  .description("Show the current engine session and granted scopes")
+  .action(async () => {
+    await runWhoami();
   });
 
 const functionsCommand = program

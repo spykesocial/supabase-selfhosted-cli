@@ -1,5 +1,5 @@
 import path from "node:path";
-import { confirm, select } from "@inquirer/prompts";
+import { confirmPrompt, selectPrompt } from "../lib/prompts.js";
 import {
   addProjectEnvironment,
   deleteConfig,
@@ -17,12 +17,14 @@ import {
 } from "../lib/config.js";
 import { promptEnvironmentName } from "../lib/environment-prompt.js";
 import {
+  logDetail,
   logError,
   logInfo,
   logReview,
   logSuccess,
   logWarning,
   paint,
+  printSection,
   printSummaryBlock,
 } from "../lib/ui.js";
 import { runSetup } from "./setup.js";
@@ -57,11 +59,11 @@ function printProjectsList(): void {
     logReview("No linked projects yet. Link this directory from the menu below.");
     console.log("");
   } else {
-    console.log(paint("Linked projects", "blue"));
+    printSection("Linked projects");
     for (const entry of registered) {
       const marker = entry.path === context.projectRoot ? " (here)" : "";
-      console.log(`  • ${formatProjectRow(entry)}${marker}`);
-      console.log(`    ${entry.path}`);
+      logDetail(`${formatProjectRow(entry)}${marker}`);
+      console.log(`    ${paint(entry.path, "gray")}`);
     }
     console.log("");
   }
@@ -72,11 +74,11 @@ function printProjectsList(): void {
   const orphanEnvironments = environments.filter((environment) => !linkedNames.has(environment));
 
   if (orphanEnvironments.length > 0) {
-    console.log(paint("Environments not linked to any project", "blue"));
+    printSection("Environments not linked to any project");
     for (const environment of orphanEnvironments) {
       const config = loadConfig(environment);
       const target = config ? formatEnvironmentTargetSummary(config) : "(missing config)";
-      console.log(`  • ${environment} (${target})`);
+      logDetail(`${environment} (${target})`);
     }
     console.log("");
   }
@@ -144,13 +146,21 @@ async function linkCurrentDirectory(): Promise<void> {
   }
 
   if (pick.kind === "existing") {
-    const environment = await select({
+    const environment = await selectPrompt({
       message: "Choose an environment to add",
-      choices: availableExisting.map((name) => ({
-        name: environmentChoiceLabel(name, context.projectId),
-        value: name,
-      })),
+      choices: [
+        ...availableExisting.map((name) => ({
+          name: environmentChoiceLabel(name, context.projectId),
+          value: name,
+        })),
+        { name: "Cancel", value: "__cancel__" as const },
+      ],
     });
+
+    if (environment === "__cancel__") {
+      return;
+    }
+
     await linkOrSetupEnvironment(cwd, environment, context);
     return;
   }
@@ -166,14 +176,21 @@ async function editEnvironment(): Promise<void> {
   const environment =
     environments.length === 0
       ? context.suggestedEnvironmentName
-      : await select({
+      : await selectPrompt({
           message: "Edit which environment?",
-          choices: environments.map((name) => ({
-            name: environmentChoiceLabel(name, context.projectId),
-            value: name,
-          })),
+          choices: [
+            ...environments.map((name) => ({
+              name: environmentChoiceLabel(name, context.projectId),
+              value: name,
+            })),
+            { name: "Cancel", value: "__cancel__" as const },
+          ],
           default: context.environment,
         });
+
+  if (environment === "__cancel__") {
+    return;
+  }
 
   await runSetup({ environment, linkProject: true, forceUpdate: true });
 }
@@ -187,12 +204,19 @@ async function deleteEnvironment(): Promise<void> {
     return;
   }
 
-  const environment = await select({
+  const environment = await selectPrompt({
     message: "Delete which environment? (removes stored passwords)",
-    choices: environments.map((name) => ({ name, value: name })),
+    choices: [
+      ...environments.map((name) => ({ name, value: name })),
+      { name: "Cancel", value: "__cancel__" as const },
+    ],
   });
 
-  const confirmed = await confirm({
+  if (environment === "__cancel__") {
+    return;
+  }
+
+  const confirmed = await confirmPrompt({
     message: `Delete environment "${environment}" and remove stored passwords?`,
     default: false,
   });
@@ -222,7 +246,7 @@ async function unlinkCurrentDirectory(): Promise<void> {
 
   if (context.environments.length === 1) {
     const environment = context.environments[0];
-    const confirmed = await confirm({
+    const confirmed = await confirmPrompt({
       message: `Unlink ${path.basename(context.projectRoot)} from "${environment}"? (credentials kept)`,
       default: false,
     });
@@ -237,7 +261,7 @@ async function unlinkCurrentDirectory(): Promise<void> {
     return;
   }
 
-  const mode = await select({
+  const mode = await selectPrompt({
     message: "Unlink",
     choices: [
       { name: "Remove one environment from this project", value: "one" },
@@ -251,7 +275,7 @@ async function unlinkCurrentDirectory(): Promise<void> {
   }
 
   if (mode === "all") {
-    const confirmed = await confirm({
+    const confirmed = await confirmPrompt({
       message: `Unlink all environments (${context.environments.join(", ")})? Credentials stay on disk.`,
       default: false,
     });
@@ -265,15 +289,22 @@ async function unlinkCurrentDirectory(): Promise<void> {
     return;
   }
 
-  const environment = await select({
+  const environment = await selectPrompt({
     message: "Remove which environment from this project?",
-    choices: context.environments.map((name) => ({
-      name: environmentChoiceLabel(name),
-      value: name,
-    })),
+    choices: [
+      ...context.environments.map((name) => ({
+        name: environmentChoiceLabel(name),
+        value: name,
+      })),
+      { name: "Cancel", value: "__cancel__" as const },
+    ],
   });
 
-  const confirmed = await confirm({
+  if (environment === "__cancel__") {
+    return;
+  }
+
+  const confirmed = await confirmPrompt({
     message: `Remove "${environment}" from this project? (credentials kept)`,
     default: false,
   });
@@ -307,14 +338,23 @@ async function showEnvironmentDetails(): Promise<void> {
 
   let environment = context.environment;
   if (context.environments.length > 1) {
-    environment = await select({
+    const picked = await selectPrompt({
       message: "Show details for which environment?",
-      choices: context.environments.map((name) => ({
-        name: environmentChoiceLabel(name, context.projectId),
-        value: name,
-      })),
+      choices: [
+        ...context.environments.map((name) => ({
+          name: environmentChoiceLabel(name, context.projectId),
+          value: name,
+        })),
+        { name: "Cancel", value: "__cancel__" as const },
+      ],
       default: environment,
     });
+
+    if (picked === "__cancel__") {
+      return;
+    }
+
+    environment = picked;
   }
 
   const config = loadConfig(environment, context.projectId);
@@ -380,7 +420,7 @@ export async function runProjects(options?: {
     );
   }
 
-  const action = await select({
+  const action = await selectPrompt({
     message: "Projects",
     choices: [
       { name: "List linked projects and environments", value: "list" },

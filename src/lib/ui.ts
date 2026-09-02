@@ -37,8 +37,11 @@ export const colors = {
   cyan: `${ESC}[0;36m`,
   yellow: `${ESC}[0;33m`,
   purple: `${ESC}[0;35m`,
+  purpleBold: `${ESC}[1;35m`,
   red: `${ESC}[0;31m`,
-  gray: `${ESC}[0;90m`,
+  gray: `${ESC}[0;38;5;244m`,
+  bold: `${ESC}[1m`,
+  dim: `${ESC}[2m`,
   nc: `${ESC}[0m`,
 } as const;
 
@@ -50,9 +53,14 @@ export const icons = {
   warning: "◎",
   arrow: "➤",
   list: "•",
+  sublist: "↳",
   dryRun: "→",
-  review: "☞",
+  review: "⊙",
   info: "ℹ",
+  empty: "○",
+  solid: "●",
+  navUp: "↑",
+  navDown: "↓",
 } as const;
 
 export function isColorEnabled(): boolean {
@@ -61,6 +69,16 @@ export function isColorEnabled(): boolean {
   }
 
   return Boolean(process.stdout.isTTY);
+}
+
+/** Remove ANSI escape sequences so we can measure true display width. */
+export function stripAnsi(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/\u001b\[[0-9;]*m/g, "");
+}
+
+export function visibleLength(text: string): number {
+  return stripAnsi(text).length;
 }
 
 export function hideCursor(): void {
@@ -95,6 +113,10 @@ export function paintBrand(text: string): string {
 
   return paint(text, "purple");
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Banner / branding
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Half-block raster of veloci-logo.svg (purple fill path).
 const LIGHTNING_MARK = [
@@ -156,72 +178,156 @@ export function showBrandBanner(): string {
   ].join("\n");
 }
 
-export function showMenuOption(
-  number: number,
-  label: string,
-  description: string,
-  selected: boolean,
-): string {
-  const text = `${label.padEnd(12)} ${description}`;
-  if (selected) {
-    return `${paintBrand(`${icons.arrow} ${number}. ${text}`)}`;
-  }
+/**
+ * Compact single-line brand header for the interactive menu.
+ */
+export function showCompactBrandHeader(): string {
+  const useColor = isColorEnabled();
+  const brand = (text: string) => (useColor ? paintBrand(text) : text);
+  const meta = (text: string) => (useColor ? paint(text, "gray") : text);
 
-  return `  ${number}. ${text}`;
+  return `${brand("⚡ Velocilabs")}  ${meta("·")}  ${meta(`supabase-selfhosted-cli ${VERSION}`)}`;
 }
 
-export function logInfo(message: string): void {
-  console.log(paint(message, "blue"));
+// ─────────────────────────────────────────────────────────────────────────────
+// Sections & panels
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Mole-style section header: `➤ Title` in bold purple. */
+export function sectionTitle(title: string): string {
+  return paint(`${icons.arrow} ${title}`, "purpleBold");
 }
 
-export function logSuccess(message: string): void {
-  console.log(`  ${paintBrand(icons.success)} ${message}`);
-}
-
-export function logWarning(message: string): void {
-  console.log(paint(message, "yellow"));
-}
-
-export function logError(message: string): void {
-  console.error(`${paint(icons.error, "yellow")} ${message}`);
-}
-
-export function logReview(message: string): void {
-  console.log(`${icons.review} ${message}`);
-}
-
-export function printSummaryBlock(heading: string, ...details: string[]): void {
-  const width = Math.min(process.stdout.columns ?? 70, 70);
-  const divider = "=".repeat(width);
-
+export function printSection(title: string): void {
   console.log("");
-  console.log(divider);
-  console.log(paint(heading, "blue"));
+  console.log(sectionTitle(title));
+}
 
-  for (const detail of details) {
-    if (detail) {
-      console.log(formatStyledConfigSummary([detail]));
+/** Align `key: value` lines so values line up; keys are dimmed. */
+export function formatDetailLines(lines: string[]): string[] {
+  let maxKey = 0;
+  for (const line of lines) {
+    const separator = line.indexOf(":");
+    if (separator !== -1) {
+      maxKey = Math.max(maxKey, separator + 1);
     }
   }
 
-  console.log(divider);
+  return lines.map((line) => {
+    const separator = line.indexOf(":");
+    if (separator === -1) {
+      return line;
+    }
+
+    const key = line.slice(0, separator + 1);
+    const value = line.slice(separator + 1);
+    const pad = Math.max(maxKey - separator - 1, 1);
+    return `${paint(key, "gray")}${" ".repeat(pad)}${value}`;
+  });
+}
+
+function truncateVisible(text: string, width: number): string {
+  if (visibleLength(text) <= width) {
+    return text;
+  }
+  const slice = stripAnsi(text).slice(0, width - 3);
+  return `${slice}...`;
+}
+
+function padVisible(text: string, width: number): string {
+  const len = visibleLength(text);
+  if (len >= width) {
+    return text;
+  }
+  return `${text}${" ".repeat(width - len)}`;
+}
+
+/** Draw a rounded, headed panel around a set of key/value lines. */
+export function renderPanel(heading: string, lines: string[]): string {
+  const termCols = process.stdout.columns ?? 80;
+  const cols = Math.min(Math.max(termCols - 2, 30), 88);
+  const innerWidth = Math.max(cols - 4, 20);
+  const formatted = formatDetailLines(lines).map((line) =>
+    line === "" ? "" : truncateVisible(line, innerWidth),
+  );
+
+  const title = ` ${sectionTitle(heading)} `;
+  const fill = Math.max(innerWidth - visibleLength(title) + 2, 2);
+
+  const top = `╭${title}${"─".repeat(fill)}╮`;
+  const bottom = `╰${"─".repeat(innerWidth + 2)}╯`;
+
+  const body = formatted
+    .map((line) =>
+      line === "" ? "│" : `│ ${padVisible(line, innerWidth)} │`,
+    )
+    .join("\n");
+
+  return [top, body, bottom].join("\n");
+}
+
+export function printPanel(heading: string, ...details: string[]): void {
+  console.log("");
+  console.log(renderPanel(heading, details));
   console.log("");
 }
+
+// Back-compat alias: callers previously used `printSummaryBlock`.
+export function printSummaryBlock(heading: string, ...details: string[]): void {
+  printPanel(heading, ...details);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Logging
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function logInfo(message: string): void {
+  console.log(`  ${paint(message, "blue")}`);
+}
+
+export function logSuccess(message: string): void {
+  console.log(`  ${paint(icons.success, "green")} ${message}`);
+}
+
+export function logWarning(message: string): void {
+  console.log(`  ${paint(icons.warning, "yellow")} ${message}`);
+}
+
+export function logError(message: string): void {
+  console.error(`  ${paint(icons.error, "red")} ${message}`);
+}
+
+export function logReview(message: string): void {
+  console.log(`  ${paint(icons.review, "gray")} ${message}`);
+}
+
+export function logDetail(message: string): void {
+  console.log(`    ${paint(icons.sublist, "gray")} ${message}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Version & help
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function formatVersion(): string {
   const environments = listEnvironments();
   const projects = listRegisteredProjects();
 
-  return [
-    "",
-    `${paintBrand(BRAND_NAME)} ${paint("supabase-selfhosted-cli", "gray")} ${VERSION}`,
-    paint(BRAND_URL, "blue"),
+  const detail = formatDetailLines([
+    `Version: ${VERSION}`,
     `Node: ${process.version}`,
     `Platform: ${process.platform} ${os.arch()}`,
+    `Shell: ${process.env.SHELL ?? "unknown"}`,
     `Config: ${CONFIG_DIR}`,
     `Environments: ${environments.length > 0 ? environments.join(", ") : "(none)"}`,
     `Linked projects: ${projects.length > 0 ? projects.map((project) => project.name).join(", ") : "(none)"}`,
-    `Shell: ${process.env.SHELL ?? "unknown"}`,
+  ]);
+
+  return [
+    "",
+    showCompactBrandHeader(),
+    "",
+    detail.join("\n"),
     "",
   ].join("\n");
 }
@@ -256,11 +362,11 @@ const EXAMPLE_ENTRIES: HelpEntry[] = [
 ];
 
 function formatHelpSection(title: string, entries: HelpEntry[]): string {
-  const lines = [paint(title, "blue")];
+  const lines = [sectionTitle(title)];
 
   for (const entry of entries) {
     const command = entry.command.padEnd(28);
-    lines.push(`  ${paintBrand(command)} ${entry.description}`);
+    lines.push(`  ${paintBrand(command)} ${paint(entry.description, "gray")}`);
   }
 
   lines.push("");
@@ -272,10 +378,10 @@ export function formatHelp(): string {
     showBrandBanner(),
     formatHelpSection("COMMANDS", COMMAND_ENTRIES),
     formatHelpSection("EXAMPLES", EXAMPLE_ENTRIES),
-    paint("OPTIONS", "blue"),
-    `  ${paintBrand("-e, --environment <name>".padEnd(28))} Use an environment for this command`,
-    `  ${paintBrand("-h, --help".padEnd(28))} Show this help message`,
-    `  ${paintBrand("-V, --version".padEnd(28))} Show version information`,
+    sectionTitle("OPTIONS"),
+    `  ${paintBrand("-e, --environment <name>".padEnd(28))} ${paint("Use an environment for this command", "gray")}`,
+    `  ${paintBrand("-h, --help".padEnd(28))} ${paint("Show this help message", "gray")}`,
+    `  ${paintBrand("-V, --version".padEnd(28))} ${paint("Show version information", "gray")}`,
     "",
   ].join("\n");
 }
@@ -284,16 +390,20 @@ export function showHelp(): void {
   console.log(formatHelp());
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Spinner
+// ─────────────────────────────────────────────────────────────────────────────
+
 export class InlineSpinner {
   private timer: NodeJS.Timeout | null = null;
   private frame = 0;
-  private readonly frames = "|/-\\";
+  private readonly frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
   constructor(private message: string) {}
 
   start(): void {
     if (!process.stderr.isTTY) {
-      console.error(this.message);
+      process.stderr.write(`  ${paint(this.message, "blue")}\n`);
       return;
     }
 
@@ -303,7 +413,7 @@ export class InlineSpinner {
       const char = this.frames[this.frame % this.frames.length];
       this.frame += 1;
       process.stderr.write(
-        `\r${paintBrand(char)} ${truncateMessage(this.message)}`,
+        `\r  ${paint(char, "blue")} ${truncateMessage(this.message)}`,
       );
     }, 80);
   }
@@ -347,16 +457,5 @@ function truncateMessage(message: string, reserve = 8): string {
 }
 
 export function formatStyledConfigSummary(lines: string[]): string {
-  return lines
-    .map((line) => {
-      const separator = line.indexOf(":");
-      if (separator === -1) {
-        return line;
-      }
-
-      const label = line.slice(0, separator + 1);
-      const value = line.slice(separator + 1);
-      return `${paint(label, "gray")}${value}`;
-    })
-    .join("\n");
+  return formatDetailLines(lines).join("\n");
 }

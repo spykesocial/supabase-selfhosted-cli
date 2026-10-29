@@ -1,12 +1,16 @@
 # Supabase Selfhosted CLI
 
-CLI for **self hosted Supabase** — on a VPS, in Docker on a remote server, or running locally on your machine. Wraps the repetitive work you do by hand: deploy edge functions, restart the runtime, push migrations, and regenerate TypeScript types. 
+CLI for **self hosted Supabase** — on a VPS, in Docker on a remote server, or running locally on your machine.
+
+So you've figured out how to use the port numbers to push migrations and sync types using the regular Supabase CLI. And credit where credit is due, Supabase really does work quite well with the " - db-url" flag. However, the entire process leaves something to be desired. Especially when dealing with real-time edge functions, as you have to keep tossing in the scp command with the right path, type in the VPS password and then restart the docker container.
+
+This thing will wrap up the repetitive work you do by hand: deploy edge functions, restart the runtime, push migrations, and regenerate TypeScript types. 
 
 As featured on https://spyke.social
 
 ![Supabase Selfhosted CLI Screenshot](assets/screenshot-2.png)
 
-So you've figured out how to use the port numbers to push migrations and sync types using the regular Supabase CLI. And credit where credit is due, Supabase really does work quite well with the " - db-url" flag. However, the entire process leaves something to be desired. Especially when dealing with real-time edge functions, as you have to keep tossing in the scp command with the right path, type in the VPS password and then restart the docker container.
+
 
 ## Install
 

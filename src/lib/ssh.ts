@@ -46,6 +46,28 @@ export async function runRemoteCommand(
   credentials: SshCredentials,
   command: string,
 ): Promise<{ stdout: string; stderr: string; code: number }> {
+  return execCommand(credentials, command, {
+    onStdout: (chunk) => process.stdout.write(chunk),
+    onStderr: (chunk) => process.stderr.write(chunk),
+  });
+}
+
+/** Like `runRemoteCommand`, but captures quietly — for internal commands. */
+export async function runRemoteCommandQuiet(
+  credentials: SshCredentials,
+  command: string,
+): Promise<{ stdout: string; stderr: string; code: number }> {
+  return execCommand(credentials, command);
+}
+
+function execCommand(
+  credentials: SshCredentials,
+  command: string,
+  handlers?: {
+    onStdout?: (chunk: Buffer) => void;
+    onStderr?: (chunk: Buffer) => void;
+  },
+): Promise<{ stdout: string; stderr: string; code: number }> {
   return withSshClient(credentials, (client) =>
     new Promise((resolve, reject) => {
       client.exec(command, (error, stream) => {
@@ -63,12 +85,12 @@ export async function runRemoteCommand(
           })
           .on("data", (data: Buffer) => {
             stdout += data.toString();
-            process.stdout.write(data);
+            handlers?.onStdout?.(data);
           });
 
         stream.stderr.on("data", (data: Buffer) => {
           stderr += data.toString();
-          process.stderr.write(data);
+          handlers?.onStderr?.(data);
         });
       });
     }),

@@ -1,6 +1,6 @@
 {
   "name": "supabase-selfhosted-cli",
-  "version": "0.2.20",
+  "version": "0.2.21",
   "description": "CLI for self-hosted Supabase — deploy edge functions, push migrations, and sync types (VPS, Docker, local)",
   "type": "module",
   "bin": {
@@ -40,11 +40,13 @@
   "dependencies": {
     "@inquirer/prompts": "^7.5.1",
     "commander": "^13.1.0",
+    "pg": "^8.23.1",
     "ssh2": "^1.16.0",
     "ssh2-sftp-client": "^12.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.15.21",
+    "@types/pg": "^8.23.1",
     "@types/ssh2": "^1.15.5",
     "@types/ssh2-sftp-client": "^9.0.5",
     "tsup": "^8.5.0",

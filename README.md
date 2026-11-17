@@ -117,6 +117,8 @@ PGSSLMODE=disable npx supabase db push --db-url 'postgresql://postgres.your-tena
 
 Self-hosted Supavisor typically has no TLS. Recent Supabase CLI versions require TLS for remote `--db-url` hosts, so this CLI sets `PGSSLMODE=disable` (and `sslmode=disable` on the URL). That is also why bare `npx supabase db push --db-url ...` fails with `tls error (server refused TLS connection)` while the same command with `--debug` succeeds.
 
+`db push` also runs a **migration-privilege preflight** ([supabase/cli#3531](https://github.com/supabase/cli/issues/3531)). The Supabase CLI runs `CREATE SCHEMA IF NOT EXISTS supabase_migrations` on every push, and PostgreSQL 15+ requires `CREATE` on the database for it — checked before the "already exists" skip — so a single missing grant fails every push of every project. When the role lacks it, this CLI grants it once (via `docker exec <db-container> psql -U supabase_admin` on your SSH target — the db container is found by its published port, never by name) and then pushes. When it cannot, it prints the exact SQL to run instead of the bare Go error.
+
 ```bash
 supabase-selfhosted-cli db push
 supabase-selfhosted-cli db push --debug
@@ -213,6 +215,16 @@ cd /etc/dokploy/compose/financial-wisdom-supabase-oy2cqz && docker compose resta
 ```
 
 Avoid host-wide greps like `grep -i edge | head -n 1` when the server runs multiple Supabase projects.
+
+## Troubleshooting
+
+The known failures of self-hosted Supavisor setups, what they actually mean, and the fix — `db push` prints these automatically when it recognizes the error:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `failed to create migration table: ERROR: permission denied for database` | PG15+ needs `CREATE` on the database for the CLI's `CREATE SCHEMA IF NOT EXISTS` — even when the schema exists ([supabase/cli#3531](https://github.com/supabase/cli/issues/3531)) | Granted automatically by the `db push` preflight. Manually, once per database, as a superuser (Studio SQL editor or `docker exec <db-container> psql -U supabase_admin`): `GRANT CREATE ON DATABASE postgres TO postgres;` |
+| `prepared statement "…" already exists` | Supavisor/pgbouncer transaction pooling vs. the Supabase CLI's prepared statements | Retry (pool state varies), or set the migration port to the stack's direct Postgres port (54xx) rather than the pooler port (64xx) |
+| `tls error: server refused TLS connection` | Self-hosted Supavisor has no TLS | Run through this CLI (it sets `PGSSLMODE=disable`), or prefix the raw command with `PGSSLMODE=disable` |
 
 ## Roadmap
 

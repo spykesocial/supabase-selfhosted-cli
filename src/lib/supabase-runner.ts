@@ -6,7 +6,22 @@ import {
   getDbPortsWithFallback,
   type SupabaseSelfhostedConfig,
 } from "./config.js";
+import { dbErrorHint, parseDbUrl } from "./db-access.js";
 import { logSuccess, logWarning, withSpinner } from "./ui.js";
+
+/** Append a plain-language fix to the known self-hosted failure modes. */
+function withKnownErrorHint<T>(dbUrl: string, run: () => T): T {
+  try {
+    return run();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const hint = dbErrorHint(message, parseDbUrl(dbUrl));
+    if (hint && error instanceof Error) {
+      throw new Error(`${error.message}\n\n${hint}`);
+    }
+    throw error;
+  }
+}
 
 export async function withDbPortFallback<T>(
   config: SupabaseSelfhostedConfig,
@@ -107,7 +122,7 @@ export async function pushDatabaseMigrations(
   }
 
   await withSpinner("Running supabase db push...", async () => {
-    runSupabase(args, { cwd: options?.cwd });
+    withKnownErrorHint(dbUrl, () => runSupabase(args, { cwd: options?.cwd }));
   });
 }
 
@@ -131,7 +146,9 @@ export async function generateTypeScriptTypes(
   }
 
   await withSpinner(`Generating TypeScript types -> ${outputFile}`, async () => {
-    runSupabase(args, { cwd: options?.cwd, outputFile });
+    withKnownErrorHint(dbUrl, () =>
+      runSupabase(args, { cwd: options?.cwd, outputFile }),
+    );
   });
   logSuccess(`Wrote ${outputFile}`);
 }
